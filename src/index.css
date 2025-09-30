@@ -1,0 +1,240 @@
+/* Dark background + neon green theme */
+body {
+  margin: 0;
+  font-family: "Orbitron", sans-serif;
+  background-color: #000; /* jet black */
+  color: #aaffaa; /* faint neon green */
+}
+
+:root {
+  --neon: #18ff6d;
+  --bracket-width: 10px; /* thickness of the bracket bars */
+  --bracket-gap: 18px; /* space between bracket and text */
+  --bracket-radius: 6px; /* rounded ends (set 0 for square) */
+  --breathe-dur: 2.2s; /* breathing speed */
+}
+
+@keyframes breatheGlow {
+  0% {
+    box-shadow: 0 0 4px var(--neon), inset 0 0 2px var(--neon);
+  }
+  50% {
+    box-shadow: 0 0 22px var(--neon), inset 0 0 10px var(--neon);
+  }
+  100% {
+    box-shadow: 0 0 4px var(--neon), inset 0 0 2px var(--neon);
+  }
+}
+
+nav {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  padding: 14px;
+}
+
+nav a {
+  position: relative;
+  display: inline-block;
+  padding: 12px calc(24px + var(--gap));
+  min-width: 140px;
+  text-align: center;
+  color: #b9ffd8;
+  text-decoration: none;
+  font: 700 20px/1 "Orbitron", sans-serif;
+  transition: color 0.15s ease;
+}
+nav a:hover {
+  color: var(--neon);
+}
+
+/* base “ghost” brackets so inactive still look like buttons */
+nav a::before,
+nav a::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--bar);
+  height: 70%; /* 70% height looks crisper than 100% */
+  background: var(--ghost);
+  border-radius: 4px;
+  pointer-events: none;
+}
+nav a::before {
+  left: 0;
+}
+nav a::after {
+  right: 0;
+}
+
+/* ACTIVE: solid bars + smooth drop-shadow glow, opacity-breathing */
+nav a.active::before,
+nav a.active::after {
+  background: var(--neon);
+  filter: drop-shadow(0 0 var(--glow1) var(--neon))
+    drop-shadow(0 0 var(--glow2) var(--neon));
+  animation: glowPulse var(--breath) ease-in-out infinite;
+}
+
+.keyguide {
+  text-align: center;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #8adfa7;
+  opacity: 0.75;
+}
+
+/* Page content styling */
+
+.page {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+h1 {
+  font-size: 42px;
+  color: #b5ffda;
+  text-shadow: 0 0 12px rgba(0, 255, 100, 0.5);
+  margin-bottom: 20px;
+}
+
+p,
+li {
+  color: #8adfa7;
+  font-size: 18px;
+}
+
+:root {
+  --neon: #18ff6d;
+  --ghost: rgba(24, 255, 109, 0.18);
+  --bar: 6px; /* bracket thickness */
+  --gap: 22px; /* space from text to bracket */
+  --glow1: 6px; /* small glow radius */
+  --glow2: 14px; /* large glow radius */
+  --breath: 2.2s; /* breathing speed */
+}
+
+/* softer breathing by opacity only */
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* layout */
+.page.home {
+  padding-top: 48px;
+}
+.menu {
+  width: min(540px, 90vw);
+  margin: 32px auto 12px;
+  display: grid;
+  gap: 18px;
+}
+
+/* buttons look like clean text with side brackets */
+.menu-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 16px 56px; /* inner padding; brackets sit outside via ::before/::after */
+  background: transparent;
+  border: none;
+  color: #b9ffd8;
+  font: 700 22px/1.2 "Orbitron", sans-serif;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.08s ease;
+}
+
+.menu {
+  width: min(540px, 90vw);
+  margin: 32px auto 12px;
+  display: grid;
+  gap: 18px;
+}
+.menu-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 16px calc(28px + var(--gap));
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #b9ffd8;
+  font: 700 22px/1.1 "Orbitron", sans-serif;
+  text-align: center;
+  transition: color 0.15s ease, transform 0.08s ease;
+}
+.menu-item:hover {
+  color: var(--neon);
+  transform: translateY(-1px);
+}
+
+/* ghost brackets on all */
+.menu-item::before,
+.menu-item::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--bar);
+  height: 72%;
+  background: var(--ghost);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.menu-item::before {
+  left: 0;
+}
+.menu-item::after {
+  right: 0;
+}
+
+/* active = bright breathing glow */
+.menu-item.active {
+  color: #d6ffe9;
+}
+.menu-item.active::before,
+.menu-item.active::after {
+  background: var(--neon);
+  filter: drop-shadow(0 0 var(--glow1) var(--neon))
+    drop-shadow(0 0 var(--glow2) var(--neon));
+  animation: glowPulse var(--breath) ease-in-out infinite;
+}
+
+/* key guide */
+.keyguide {
+  text-align: center;
+  margin-top: 10px;
+  color: #8adfa7;
+  opacity: 0.8;
+  font-size: 14px;
+}
+
+/* Title + Tagline */
+.hero {
+  text-align: center;
+  margin-top: 32px;
+  margin-bottom: 12px;
+}
+
+.title {
+  letter-spacing: 4px;
+  font-size: 52px;
+  margin: 0 0 6px 0;
+  color: #caffdd;
+  text-shadow: 0 0 18px rgba(24, 255, 109, 0.35);
+}
+
+.tagline {
+  margin: 0;
+  font-size: 16px;
+  color: #8adfa7;
+  opacity: 0.9;
+}
