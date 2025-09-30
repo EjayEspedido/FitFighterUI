@@ -238,3 +238,85 @@ li {
   color: #8adfa7;
   opacity: 0.9;
 }
+
+/* Tabs */
+.lb-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 10px 0 18px;
+}
+.lb-tab {
+  position: relative;
+  padding: 12px 56px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #b9ffd8;
+  font: 700 18px "Orbitron", sans-serif;
+  /* ghost brackets */
+}
+.lb-tab::before,
+.lb-tab::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 70%;
+  background: rgba(24, 255, 109, 0.18);
+  border-radius: 4px;
+}
+.lb-tab::before {
+  left: 0;
+}
+.lb-tab::after {
+  right: 0;
+}
+.lb-tab:hover {
+  color: #18ff6d;
+}
+.lb-tab.active {
+  color: #d6ffe9;
+}
+.lb-tab.active::before,
+.lb-tab.active::after {
+  background: #18ff6d;
+  filter: drop-shadow(0 0 6px #18ff6d) drop-shadow(0 0 14px #18ff6d);
+  animation: glowPulse 2.2s ease-in-out infinite;
+}
+
+/* Table */
+.lb-table-wrap {
+  width: min(900px, 95vw);
+  margin: 0 auto;
+  border: 1px solid rgba(24, 255, 109, 0.25);
+  border-radius: 12px;
+  padding: 6px;
+  backdrop-filter: blur(0.5px);
+}
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Orbitron", sans-serif;
+}
+.lb-table thead th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: #b9ffd8;
+  border-bottom: 1px solid rgba(24, 255, 109, 0.25);
+}
+.lb-table tbody td {
+  padding: 12px 14px;
+  font-size: 16px;
+  color: #caffdd;
+  border-bottom: 1px dashed rgba(24, 255, 109, 0.12);
+}
+.lb-table tbody tr:hover td {
+  background: rgba(24, 255, 109, 0.04);
+}
+.lb-table tbody tr:last-child td {
+  border-bottom: none;
+}
