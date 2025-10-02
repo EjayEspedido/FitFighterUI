@@ -320,3 +320,49 @@ li {
 .lb-table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* song tabs under Rhythm */
+.lb-song-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 6px 0 14px;
+}
+.lb-song {
+  position: relative;
+  padding: 10px 44px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #b9ffd8;
+  font: 700 16px "Orbitron", sans-serif;
+}
+.lb-song::before,
+.lb-song::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 66%;
+  background: rgba(24, 255, 109, 0.18);
+  border-radius: 4px;
+}
+.lb-song::before {
+  left: 0;
+}
+.lb-song::after {
+  right: 0;
+}
+.lb-song:hover {
+  color: #18ff6d;
+}
+.lb-song.active {
+  color: #d6ffe9;
+}
+.lb-song.active::before,
+.lb-song.active::after {
+  background: #18ff6d;
+  filter: drop-shadow(0 0 6px #18ff6d) drop-shadow(0 0 14px #18ff6d);
+  animation: glowPulse 2.2s ease-in-out infinite;
+}
