@@ -223,7 +223,7 @@ export default function Leaderboards() {
 
   return (
     <div className="page">
-      <h1>📊 Leaderboards</h1>
+      <h1>Leaderboards</h1>
 
       {/* Category tabs */}
       <div className="lb-tabs">
