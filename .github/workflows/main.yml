@@ -2,7 +2,7 @@ name: Deploy Vite site to GitHub Pages
 
 on:
   push:
-    branches: [main] # or master, depending on your repo
+    branches: [main] # or master, depending on your default branch
   workflow_dispatch:
 
 permissions:
@@ -15,12 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # ✅ updated
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # ✅ updated
         with:
           node-version: 18
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -29,7 +30,7 @@ jobs:
         run: npm run build
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3 # ✅ updated
         with:
           path: ./dist
 
@@ -42,4 +43,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4 # ✅ updated
