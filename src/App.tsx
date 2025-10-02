@@ -11,11 +11,16 @@ import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
 
-const PAGES = ["/", "/leaderboards", "/settings"];
+// Notice: include the /fit-fighter-ui prefix here too
+const PAGES = [
+  "/fit-fighter-ui/",
+  "/fit-fighter-ui/leaderboards",
+  "/fit-fighter-ui/settings",
+];
 
 export default function App() {
   return (
-    <Router basename="/fit-fighter-ui/">
+    <Router basename="/fit-fighter-ui">
       <MainApp />
     </Router>
   );
@@ -32,10 +37,10 @@ function MainApp() {
 
       if (e.key === "1") {
         const prev = (idx - 1 + PAGES.length) % PAGES.length;
-        navigate(PAGES[prev]);
+        navigate(PAGES[prev].replace("/fit-fighter-ui", "")); // strip basename
       } else if (e.key === "3") {
         const next = (idx + 1) % PAGES.length;
-        navigate(PAGES[next]);
+        navigate(PAGES[next].replace("/fit-fighter-ui", "")); // strip basename
       }
     };
 
@@ -75,6 +80,7 @@ function MainApp() {
         <Route path="/" element={<Home />} />
         <Route path="/leaderboards" element={<Leaderboards />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Home />} />
       </Routes>
     </div>
   );
