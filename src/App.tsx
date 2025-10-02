@@ -1,4 +1,5 @@
 import {
+  BrowserRouter as Router,
   Routes,
   Route,
   NavLink,
@@ -13,13 +14,20 @@ import Settings from "./pages/Settings";
 const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
+  return (
+    <Router basename="/fit-fighter-ui/">
+      <MainApp />
+    </Router>
+  );
+}
+
+function MainApp() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 1 = left, 3 = right
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return; // ignore held key auto-repeat
+      if (e.repeat) return;
       const idx = Math.max(0, PAGES.indexOf(location.pathname));
 
       if (e.key === "1") {
