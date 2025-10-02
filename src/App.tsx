@@ -1,5 +1,4 @@
 import {
-  BrowserRouter as Router,
   Routes,
   Route,
   NavLink,
@@ -11,14 +10,11 @@ import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
 
+// Routes relative to basename
 const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
-  return (
-    <Router basename="/fit-fighter-ui">
-      <MainApp />
-    </Router>
-  );
+  return <MainApp />;
 }
 
 function MainApp() {
@@ -28,7 +24,10 @@ function MainApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      const idx = Math.max(0, PAGES.indexOf(location.pathname));
+      const idx = Math.max(
+        0,
+        PAGES.indexOf(location.pathname.replace("/fit-fighter-ui", ""))
+      );
 
       if (e.key === "1") {
         const prev = (idx - 1 + PAGES.length) % PAGES.length;

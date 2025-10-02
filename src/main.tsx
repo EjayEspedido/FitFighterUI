@@ -6,7 +6,8 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    {/* Keep Router here with basename */}
+    <BrowserRouter basename="/fit-fighter-ui">
       <App />
     </BrowserRouter>
   </React.StrictMode>
