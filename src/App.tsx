@@ -11,10 +11,7 @@ import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
 
-const BASENAME = import.meta.env.BASE_URL;
-// Vite sets this from vite.config.ts "base" value
-
-const PAGES = [`${BASENAME}`, `${BASENAME}leaderboards`, `${BASENAME}settings`];
+const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
   return (
