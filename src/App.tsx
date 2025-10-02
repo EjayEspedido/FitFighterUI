@@ -11,7 +11,6 @@ import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
 
-// Only relative paths (no /fit-fighter-ui here)
 const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
@@ -29,10 +28,7 @@ function MainApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      const idx = Math.max(
-        0,
-        PAGES.indexOf(location.pathname.replace("/fit-fighter-ui", ""))
-      );
+      const idx = Math.max(0, PAGES.indexOf(location.pathname));
 
       if (e.key === "1") {
         const prev = (idx - 1 + PAGES.length) % PAGES.length;
