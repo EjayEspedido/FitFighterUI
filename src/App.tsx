@@ -11,12 +11,8 @@ import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
 
-// Notice: include the /fit-fighter-ui prefix here too
-const PAGES = [
-  "/fit-fighter-ui/",
-  "/fit-fighter-ui/leaderboards",
-  "/fit-fighter-ui/settings",
-];
+// Only relative paths (no /fit-fighter-ui here)
+const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
   return (
@@ -33,14 +29,17 @@ function MainApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      const idx = Math.max(0, PAGES.indexOf(location.pathname));
+      const idx = Math.max(
+        0,
+        PAGES.indexOf(location.pathname.replace("/fit-fighter-ui", ""))
+      );
 
       if (e.key === "1") {
         const prev = (idx - 1 + PAGES.length) % PAGES.length;
-        navigate(PAGES[prev].replace("/fit-fighter-ui", "")); // strip basename
+        navigate(PAGES[prev]);
       } else if (e.key === "3") {
         const next = (idx + 1) % PAGES.length;
-        navigate(PAGES[next].replace("/fit-fighter-ui", "")); // strip basename
+        navigate(PAGES[next]);
       }
     };
 
