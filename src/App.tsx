@@ -9,6 +9,10 @@ import { useEffect } from "react";
 import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
+import Modes from "./pages/Modes";
+import PlayCombo from "./pages/play/PlayCombo";
+import PlayFoF from "./pages/play/PlayFoF";
+import PlayRhythm from "./pages/play/PlayRhythm";
 
 // Routes relative to basename
 const PAGES = ["/", "/leaderboards", "/settings"];
@@ -73,8 +77,12 @@ function MainApp() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/leaderboards" element={<Leaderboards />} />
+        <Route path="/modes" element={<Modes />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Home />} />
+
+        <Route path="/play/combo" element={<PlayCombo />} />
+        <Route path="/play/fof" element={<PlayFoF />} />
+        <Route path="/play/rhythm" element={<PlayRhythm />} />
       </Routes>
     </div>
   );

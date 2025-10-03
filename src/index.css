@@ -366,3 +366,9 @@ li {
   filter: drop-shadow(0 0 6px #18ff6d) drop-shadow(0 0 14px #18ff6d);
   animation: glowPulse 2.2s ease-in-out infinite;
 }
+.menu-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #9be8bd;
+  opacity: 0.9;
+}
