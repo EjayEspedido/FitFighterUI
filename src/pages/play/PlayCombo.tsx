@@ -9,6 +9,7 @@ const SETS: number[][] = [
   [1, 3, 5],
   [2, 2, 3, 2, 3],
   [1, 4, 7, 6, 5],
+  [1, 4, 7, 6, 5],
 ];
 
 const PlayCombo: React.FC = () => {
