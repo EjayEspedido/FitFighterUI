@@ -14,17 +14,6 @@ import PlayCombo from "./pages/play/PlayCombo";
 import PlayFoF from "./pages/play/PlayFoF";
 import PlayRhythm from "./pages/play/PlayRhythm";
 
-import HRMPanel from "./HRMPanel.tsx";
-
-export default function App() {
-  return (
-    <main style={{ padding: 24 }}>
-      <h1>HRM Demo</h1>
-      <HRMPanel />
-    </main>
-  );
-}
-
 // Routes relative to basename
 const PAGES = ["/", "/leaderboards", "/settings"];
 
