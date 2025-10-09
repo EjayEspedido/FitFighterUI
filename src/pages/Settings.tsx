@@ -6,8 +6,6 @@ export default function Settings() {
     <div style={{ padding: 16 }}>
       <h1>Settings</h1>
 
-      {/* other settings sections... */}
-
       <section style={{ marginTop: 24 }}>
         <h2>Bluetooth Heart Rate</h2>
         <HRMPanel />
