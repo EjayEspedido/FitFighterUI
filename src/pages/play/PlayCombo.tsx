@@ -1,4 +1,4 @@
-// src/pages/PlayCombo.tsx
+// src/pages/play/PlayCombo.tsx
 import React, {
   useCallback,
   useEffect,
@@ -6,11 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ navigate to menu
-import PadVisualizer from "../components/PadVisualizer";
-import EndScreen from "../components/EndScreen";
-import StartScreen from "../components/StartScreenCombo";
-import HRMPanel from "../components/HRMPanel";
+import { useNavigate } from "react-router-dom";
+import PadVisualizer from "../../components/PadVisualizer";
+import EndScreen from "../../components/EndScreen";
+import StartScreen from "../../components/StartScreenCombo";
+import { useHeartRate } from "../../apis/HeartRateProvider"; // ✅ global HRM
 
 // ------- Config -------
 const PREP_SECONDS = 20;
@@ -52,23 +52,22 @@ const PlayCombo: React.FC<PlayComboProps> = ({
   const currentSet = sets[setIdx] ?? [];
   const activePad = currentSet[stepIdx];
 
-  // -------- Heart Rate integration --------
-  const [currentHR, setCurrentHR] = useState<number | null>(null);
+  // -------- Global Heart Rate (persisted across app) --------
+  const { bpm: currentHR } = useHeartRate(); // live BPM from provider
   const hrSamplesRef = useRef<number[]>([]);
   const phaseRef = useRef<Phase>("prep");
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Stable onBpm to avoid reconnects in HRMPanel
-  const handleBpm = useCallback((val: number) => {
-    setCurrentHR(val);
-    if (phaseRef.current === "playing") {
-      hrSamplesRef.current.push(val);
+  // Collect per-session samples only while playing
+  useEffect(() => {
+    if (phase === "playing" && currentHR != null) {
+      hrSamplesRef.current.push(currentHR);
     }
-  }, []);
+  }, [phase, currentHR]);
 
-  // Live avg/max HR
+  // Live avg/max HR for this session
   const { avgHR, maxHR } = useMemo(() => {
     const arr = hrSamplesRef.current;
     if (!arr.length)
@@ -120,8 +119,9 @@ const PlayCombo: React.FC<PlayComboProps> = ({
           setTimeout(() => {
             transitioningRef.current = false;
           }, 0);
+          // keep step frozen until phase changes
         }
-        return i; // freeze until phase changes
+        return i;
       }
       return next;
     });
@@ -210,12 +210,13 @@ const PlayCombo: React.FC<PlayComboProps> = ({
     if (phase === "playing") setStepIdx(0);
   }, [phase]);
 
-  // -------- Navigation: EndScreen -> Start menu --------
+  // -------- Navigation: EndScreen / Exit -> Start menu --------
   const navigate = useNavigate();
-  const MENU_PATH = "/"; // 👈 change to your actual start menu route
-  const onRestart = () => {
+  const MENU_PATH = "/modes"; // 👈 your start menu route
+
+  const goToMenu = useCallback(() => {
     navigate(MENU_PATH);
-  };
+  }, [navigate]);
 
   // -------- End screen --------
   if (phase === "ended") {
@@ -226,7 +227,7 @@ const PlayCombo: React.FC<PlayComboProps> = ({
         maxCombo={maxCombo}
         avgHR={avgHR}
         maxHR={maxHR}
-        onRestart={onRestart} // ✅ navigates to start menu
+        onRestart={goToMenu} // ✅ navigates to start menu
       />
     );
   }
@@ -311,7 +312,7 @@ const PlayCombo: React.FC<PlayComboProps> = ({
           <StartScreen
             duration={PREP_SECONDS}
             onStart={() => setPhase("playing")}
-            onExit={() => setPhase("ended")}
+            onExit={goToMenu} // ✅ Exit returns to menu immediately
             level="Intermediate"
             heartRate={currentHR}
           />
@@ -341,11 +342,6 @@ const PlayCombo: React.FC<PlayComboProps> = ({
             </p>
           </>
         )}
-
-        {/* HR panel */}
-        <div style={{ marginTop: 4, width: "100%", maxWidth: 920 }}>
-          <HRMPanel onBpm={handleBpm} />
-        </div>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+// src/App.tsx
 import {
   Routes,
   Route,
@@ -13,25 +14,36 @@ import Modes from "./pages/Modes";
 import PlayCombo from "./pages/play/PlayCombo";
 import PlayFoF from "./pages/play/PlayFoF";
 import PlayRhythm from "./pages/play/PlayRhythm";
+import { HeartRateProvider } from "./apis/HeartRateProvider";
+import TopBarHR from "./components/TopBarHR";
 
 // Routes relative to basename
 const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
-  return <MainApp />;
+  return (
+    <HeartRateProvider>
+      <MainApp />
+    </HeartRateProvider>
+  );
 }
 
 function MainApp() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Normalize for GitHub Pages-style basenames (as in your original code)
+  const normalizedPath = location.pathname.replace("/fit-fighter-ui", "");
+  const inGameplay = normalizedPath.startsWith("/play");
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      const idx = Math.max(
-        0,
-        PAGES.indexOf(location.pathname.replace("/fit-fighter-ui", ""))
-      );
+
+      // 🚫 Disable global page navigation while in any /play/* route
+      if (inGameplay) return;
+
+      const idx = Math.max(0, PAGES.indexOf(normalizedPath));
 
       if (e.key === "1") {
         const prev = (idx - 1 + PAGES.length) % PAGES.length;
@@ -44,35 +56,43 @@ function MainApp() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [location.pathname, navigate]);
+  }, [normalizedPath, navigate, inGameplay]);
 
   return (
     <div>
-      <nav>
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) => (isActive ? "active" : "")}
-        >
-          Home
-        </NavLink>
-        <NavLink
-          to="/leaderboards"
-          className={({ isActive }) => (isActive ? "active" : "")}
-        >
-          Leaderboards
-        </NavLink>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) => (isActive ? "active" : "")}
-        >
-          Settings
-        </NavLink>
-      </nav>
+      {/* 🔝 Global HR bar (persists device & BPM across the whole app) */}
+      <TopBarHR />
 
-      <div className="keyguide">
-        Press <b>1</b> ◀︎ / ▶︎ <b>3</b> to switch pages
-      </div>
+      {/* 🧭 Hide the main nav while playing to avoid distractions */}
+      {!inGameplay && (
+        <>
+          <nav>
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Home
+            </NavLink>
+            <NavLink
+              to="/leaderboards"
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Leaderboards
+            </NavLink>
+            <NavLink
+              to="/settings"
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Settings
+            </NavLink>
+          </nav>
+
+          <div className="keyguide">
+            Press <b>1</b> ◀︎ / ▶︎ <b>3</b> to switch pages
+          </div>
+        </>
+      )}
 
       <Routes>
         <Route path="/" element={<Home />} />
@@ -80,6 +100,7 @@ function MainApp() {
         <Route path="/modes" element={<Modes />} />
         <Route path="/settings" element={<Settings />} />
 
+        {/* 🎮 Gameplay routes */}
         <Route path="/play/combo" element={<PlayCombo />} />
         <Route path="/play/fof" element={<PlayFoF />} />
         <Route path="/play/rhythm" element={<PlayRhythm />} />
