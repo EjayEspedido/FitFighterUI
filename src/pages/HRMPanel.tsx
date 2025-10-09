@@ -1,5 +1,5 @@
 // HRMPanel.tsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 const HEART_RATE_SERVICE = 0x180d;
 const HEART_RATE_MEASUREMENT = 0x2a37;
 
