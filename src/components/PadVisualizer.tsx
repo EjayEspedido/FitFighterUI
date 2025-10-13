@@ -1,3 +1,4 @@
+// PadVisualizer.tsx
 import React, { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -5,7 +6,8 @@ interface PadVisualizerProps {
   sequence: number[];
   activeIndex: number;
   onAdvance: () => void;
-  missFlash?: boolean; // 👈 new: trigger a red miss flash on current pad
+  missFlash?: boolean;
+  mode?: "show" | "hit"; // 👈 NEW
 }
 
 const padLayout: (number | null)[][] = [
@@ -27,10 +29,19 @@ const boxStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   userSelect: "none",
-  transition: "transform 180ms ease, filter 180ms ease",
+  transition:
+    "transform 180ms ease, filter 180ms ease, background 180ms ease, border-color 180ms ease",
 };
 
-const activeBoxStyle: CSSProperties = {
+const activeStyleShow: CSSProperties = {
+  // Blue for SHOW phase
+  background: "#60a5fa",
+  border: "4px solid #3b82f6",
+  color: "#0b1220",
+};
+
+const activeStyleHit: CSSProperties = {
+  // Green for HIT phase
   background: "#34d399",
   border: "4px solid #10b981",
   color: "#0b1b12",
@@ -54,6 +65,7 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
   activeIndex,
   onAdvance,
   missFlash,
+  mode = "hit", // default to HIT styling if not provided
 }) => {
   const activePad = sequence[activeIndex];
   const [flash, setFlash] = useState(false);
@@ -66,7 +78,6 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [onAdvance]);
 
-  // small green flash when step changes
   useEffect(() => {
     setFlash(true);
     const t = setTimeout(() => setFlash(false), 220);
@@ -81,6 +92,11 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
           50%  { box-shadow: 0 0 28px rgba(16,185,129,0.85), 0 0 60px rgba(16,185,129,0.30); transform: scale(1.04); }
           100% { box-shadow: 0 0 14px rgba(16,185,129,0.35), 0 0 0 rgba(16,185,129,0); transform: scale(1.00); }
         }
+        @keyframes padPulseBlue {
+          0%   { box-shadow: 0 0 14px rgba(59,130,246,0.35), 0 0 0 rgba(59,130,246,0); transform: scale(1.00); }
+          50%  { box-shadow: 0 0 28px rgba(59,130,246,0.85), 0 0 60px rgba(59,130,246,0.30); transform: scale(1.04); }
+          100% { box-shadow: 0 0 14px rgba(59,130,246,0.35), 0 0 0 rgba(59,130,246,0); transform: scale(1.00); }
+        }
         @keyframes padFlash {
           0%   { filter: brightness(1.7); transform: scale(1.08); }
           100% { filter: brightness(1.0); transform: scale(1.00); }
@@ -92,7 +108,8 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
           75%  { transform: translateX(-3px) scale(1.02); }
           100% { box-shadow: 0 0 0 rgba(239,68,68,0); transform: translateX(0) scale(1.00); }
         }
-        .pad-active { animation: padPulse 1.2s ease-in-out infinite; }
+        .pad-active-hit  { animation: padPulse 1.2s ease-in-out infinite; }
+        .pad-active-show { animation: padPulseBlue 1.2s ease-in-out infinite; }
         .pad-flash  { animation: padFlash 180ms ease-out; }
         .pad-miss   { animation: padMiss 260ms ease-out; background: #ef4444 !important; border-color: #b91c1c !important; color: #fff !important; }
       `}</style>
@@ -104,7 +121,11 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
               if (!pad) return <div key={cIdx} style={spacerStyle} />;
               const isActive = pad === activePad;
               const classes = [
-                isActive ? "pad-active" : "",
+                isActive
+                  ? mode === "show"
+                    ? "pad-active-show"
+                    : "pad-active-hit"
+                  : "",
                 isActive && flash ? "pad-flash" : "",
                 isActive && missFlash ? "pad-miss" : "",
               ]
@@ -116,7 +137,11 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
                   className={classes}
                   style={{
                     ...boxStyle,
-                    ...(isActive ? activeBoxStyle : {}),
+                    ...(isActive
+                      ? mode === "show"
+                        ? activeStyleShow
+                        : activeStyleHit
+                      : {}),
                   }}
                 >
                   {pad}

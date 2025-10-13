@@ -16,15 +16,18 @@ import PlayFoF from "./pages/play/PlayFoF";
 import PlayRhythm from "./pages/play/PlayRhythm";
 import { HeartRateProvider } from "./apis/HeartRateProvider";
 import TopBarHR from "./components/TopBarHR";
+import { RaspiWSProvider } from "./apis/RaspiComboWSContext";
 
 // Routes relative to basename
 const PAGES = ["/", "/leaderboards", "/settings"];
 
 export default function App() {
   return (
-    <HeartRateProvider>
-      <MainApp />
-    </HeartRateProvider>
+    <RaspiWSProvider>
+      <HeartRateProvider>
+        <MainApp />
+      </HeartRateProvider>
+    </RaspiWSProvider>
   );
 }
 
