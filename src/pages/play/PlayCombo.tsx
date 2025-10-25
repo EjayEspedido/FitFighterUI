@@ -10,291 +10,229 @@ import { useNavigate } from "react-router-dom";
 import PadVisualizer from "../../components/PadVisualizer";
 import EndScreen from "../../components/EndScreen";
 import StartScreen from "../../components/StartScreenCombo";
-import { useRaspi } from "../../apis/RaspiComboWSContext";
+import { useHeartRate } from "../../apis/HeartRateProvider"; // ✅ global HRM
 
-const DEFAULT_DURATION_SEC = 180;
-const SHOW_INTERVAL_MS = 450;
-const SHOW_HOLD_MS = 220;
-const BETWEEN_COMBOS_PAUSE_MS = 400;
+// ------- Config -------
+const PREP_SECONDS = 20;
+const REST_SECONDS = 5;
 
+// Replace with the JSON you pass for the current session
+const DEFAULT_SESSION_SETS: number[][] = [
+  [1, 1, 3],
+  [1, 3, 2],
+];
+
+// Scoring
 const BASE_HIT_POINTS = 100;
 const COMBO_BONUS_PER_HIT = 10;
 
-type Phase = "setup" | "show" | "hit" | "ended";
-type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
-
-const DEFAULT_COMBOS: Record<Level, number[][]> = {
-  Beginner: [
-    [1, 1, 3],
-    [1, 2, 1],
-    [2, 2, 3],
-    [1, 3, 2],
-  ],
-  Intermediate: [
-    [1, 3, 5],
-    [2, 2, 3, 2, 3],
-    [1, 4, 7, 6, 5],
-    [3, 3, 1, 2],
-  ],
-  Advanced: [
-    [1, 2, 1, 2, 3],
-    [2, 3, 4, 3, 2],
-    [5, 5, 3, 1, 2, 1],
-  ],
-  Expert: [
-    [1, 2, 3, 2, 1, 4, 6, 8],
-    [8, 6, 4, 2, 1, 3, 5, 7],
-    [1, 1, 2, 2, 3, 3, 2, 1],
-  ],
-};
-
-const BLUE = { r: 0, g: 0, b: 255 };
-const GREEN = { r: 0, g: 255, b: 0 };
-const RED = { r: 255, g: 0, b: 0 };
+// ------- Types -------
+type Phase = "prep" | "playing" | "rest" | "ended";
 
 interface PlayComboProps {
-  combosByLevel?: Record<Level, number[][]>;
-  auraPoints?: number;
-  initialLevel?: Level;
-  raspiLights?: {
-    onOneStrip?: (
-      pad: number,
-      color: { r: number; g: number; b: number }
-    ) => void;
-    offOneStrip?: (pad: number) => void;
-    onAll?: (color: { r: number; g: number; b: number }) => void;
-    offAll?: () => void;
-    flashPad?: (
-      pad: number,
-      color: { r: number; g: number; b: number },
-      ms: number
-    ) => void;
-  };
+  sets?: number[][];
 }
 
 const PlayCombo: React.FC<PlayComboProps> = ({
-  combosByLevel = DEFAULT_COMBOS,
-  auraPoints = 0,
-  initialLevel = "Beginner",
-  raspiLights,
+  sets = DEFAULT_SESSION_SETS,
 }) => {
-  const [phase, setPhase] = useState<Phase>("setup");
-  const [level, setLevel] = useState<Level>(initialLevel);
-  const [durationSec, setDurationSec] = useState(DEFAULT_DURATION_SEC);
+  // -------- Core state --------
+  const [phase, setPhase] = useState<Phase>("prep");
+  const [restLeft, setRestLeft] = useState(REST_SECONDS);
 
-  const [gameEndsAt, setGameEndsAt] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(durationSec);
+  const [setIdx, setSetIdx] = useState(0);
+  const [stepIdx, setStepIdx] = useState(0);
 
   const [score, setScore] = useState(0);
   const [misses, setMisses] = useState(0);
-  const [combosCleared, setCombosCleared] = useState(0);
+  const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [missFlash, setMissFlash] = useState(false);
 
-  const [currentCombo, setCurrentCombo] = useState<number[]>([]);
-  const [showIdx, setShowIdx] = useState(0);
-  const [hitIdx, setHitIdx] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const currentSet = sets[setIdx] ?? [];
+  const activePad = currentSet[stepIdx];
 
-  const phaseRef = useRef<Phase>("setup");
-  const currentComboRef = useRef<number[]>([]);
-  const hitIdxRef = useRef(0);
-  const showIdxRef = useRef(0);
+  // -------- Global Heart Rate (persisted across app) --------
+  const { bpm: currentHR } = useHeartRate(); // live BPM from provider
+  const hrSamplesRef = useRef<number[]>([]);
+  const phaseRef = useRef<Phase>("prep");
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
-  useEffect(() => {
-    currentComboRef.current = currentCombo;
-  }, [currentCombo]);
-  useEffect(() => {
-    hitIdxRef.current = hitIdx;
-  }, [hitIdx]);
-  useEffect(() => {
-    showIdxRef.current = showIdx;
-  }, [showIdx]);
 
-  // 🔌 RasPi WS from context (hook is used in Settings, provider shares it)
-  const { connected, lastCombo, requestCombo, reportResult } = useRaspi();
-  const lastComboRef = useRef<number[] | null>(null);
+  // Collect per-session samples only while playing
   useEffect(() => {
-    lastComboRef.current = lastCombo;
-  }, [lastCombo]);
-
-  const pickRandomComboLocal = useCallback((): number[] => {
-    const pool = combosByLevel[level] ?? [];
-    if (!pool.length) return [1, 2, 3];
-    return [...pool[Math.floor(Math.random() * pool.length)]];
-  }, [combosByLevel, level]);
-
-  const getComboFromRaspi = useCallback(async (): Promise<number[]> => {
-    const start = lastComboRef.current
-      ? JSON.stringify(lastComboRef.current)
-      : null;
-    if (!connected) return pickRandomComboLocal();
-
-    requestCombo(level);
-    const deadline = Date.now() + 1200;
-    while (Date.now() < deadline) {
-      await sleep(40);
-      const cur = lastComboRef.current
-        ? JSON.stringify(lastComboRef.current)
-        : null;
-      if (cur && cur !== start) {
-        try {
-          const parsed = JSON.parse(cur);
-          if (Array.isArray(parsed)) return parsed as number[];
-        } catch {}
-      }
+    if (phase === "playing" && currentHR != null) {
+      hrSamplesRef.current.push(currentHR);
     }
-    return pickRandomComboLocal();
-  }, [connected, level, requestCombo, pickRandomComboLocal]);
+  }, [phase, currentHR]);
 
-  // Countdown
+  // Live avg/max HR for this session
+  const { avgHR, maxHR } = useMemo(() => {
+    const arr = hrSamplesRef.current;
+    if (!arr.length)
+      return { avgHR: null as number | null, maxHR: null as number | null };
+    const max = arr.reduce((a, b) => (b > a ? b : a), arr[0]);
+    const avg = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+    return { avgHR: avg, maxHR: max };
+  }, [currentHR, phase === "ended"]);
+
+  // -------- Set progression (stage + commit) --------
+  const nextSetIdxRef = useRef<number | null>(null); // stage next set here
+
+  // Rest timer: commits staged set index exactly once
   useEffect(() => {
-    if (phase === "setup" || phase === "ended" || !gameEndsAt) return;
-    const t = setInterval(() => {
-      const left = Math.max(0, Math.ceil((gameEndsAt - Date.now()) / 1000));
-      setTimeLeft(left);
-      if (left <= 0) setPhase("ended");
-    }, 250);
-    return () => clearInterval(t);
-  }, [phase, gameEndsAt]);
-
-  const fmtMMSS = (s: number) =>
-    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(
-      2,
-      "0"
-    )}`;
-
-  // Start
-  const startGame = useCallback(async () => {
-    setTimeLeft(durationSec);
-    setScore(0);
-    setMisses(0);
-    setCombosCleared(0);
-    setMaxCombo(0);
-
-    const firstCombo = await getComboFromRaspi();
-    setCurrentCombo(firstCombo);
-    setShowIdx(0);
-    setHitIdx(0);
-    setActiveIndex(0);
-
-    setGameEndsAt(Date.now() + durationSec * 1000);
-    setPhase("show");
-  }, [durationSec, getComboFromRaspi]);
-
-  // SHOW
-  useEffect(() => {
-    if (phase !== "show") return;
-    let cancelled = false;
-
-    const runShow = async () => {
-      const seq = currentComboRef.current;
-      raspiLights?.offAll?.();
-
-      for (let i = 0; i < seq.length; i++) {
-        if (cancelled || phaseRef.current !== "show") return;
-        const pad = seq[i];
-        setShowIdx(i);
-        setActiveIndex(i);
-
-        raspiLights?.onOneStrip?.(pad, BLUE);
-        await sleep(SHOW_HOLD_MS);
-        raspiLights?.offOneStrip?.(pad);
-        await sleep(SHOW_INTERVAL_MS);
+    if (phase !== "rest") return;
+    if (restLeft <= 0) {
+      if (nextSetIdxRef.current != null) {
+        setSetIdx(nextSetIdxRef.current);
+        nextSetIdxRef.current = null;
       }
+      setStepIdx(0);
+      setRestLeft(REST_SECONDS);
+      setPhase("playing");
+      return;
+    }
+    const t = setTimeout(() => setRestLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, restLeft]);
 
-      if (cancelled || phaseRef.current !== "show") return;
-      raspiLights?.onAll?.(BLUE);
-      await sleep(180);
-      raspiLights?.offAll?.();
-      setHitIdx(0);
-      setActiveIndex(0);
-      setPhase("hit");
-    };
+  // Single path to advance within a set, with debounce/lock
+  const transitioningRef = useRef(false);
+  const lastAdvanceAtRef = useRef(0);
+  const goNext = useCallback(() => {
+    const now = performance.now();
+    if (transitioningRef.current) return;
+    if (now - lastAdvanceAtRef.current < 40) return; // debounce
+    lastAdvanceAtRef.current = now;
 
-    runShow();
-    return () => {
-      cancelled = true;
-    };
-  }, [phase, currentCombo, raspiLights]);
+    setStepIdx((i) => {
+      const next = i + 1;
+      if (next >= currentSet.length) {
+        if (setIdx + 1 >= sets.length) {
+          setPhase("ended");
+        } else {
+          // Stage next set; do NOT increment setIdx now
+          nextSetIdxRef.current = setIdx + 1;
+          transitioningRef.current = true;
+          setPhase("rest");
+          setTimeout(() => {
+            transitioningRef.current = false;
+          }, 0);
+          // keep step frozen until phase changes
+        }
+        return i;
+      }
+      return next;
+    });
+  }, [currentSet.length, setIdx, sets.length]);
 
-  // HIT
+  // -------- Keyboard handling (mount once) --------
+  const activePadRef = useRef<number | undefined>(undefined);
+  const comboRef = useRef(0);
   useEffect(() => {
-    if (phase !== "hit") return;
+    activePadRef.current = activePad;
+  }, [activePad]);
+  useEffect(() => {
+    comboRef.current = combo;
+  }, [combo]);
 
-    const normalize = (e: KeyboardEvent): number | null => {
+  useEffect(() => {
+    const normalizeKeyToPad = (e: KeyboardEvent): number | null => {
       if (/^[1-8]$/.test(e.key)) return parseInt(e.key, 10);
       const m = /^Numpad([1-8])$/.exec(e.code || "");
       return m ? parseInt(m[1], 10) : null;
     };
+    const isNavKey = (e: KeyboardEvent) =>
+      e.key === "4" ||
+      e.key === "6" ||
+      e.key === "7" ||
+      e.key === "8" ||
+      /^Numpad[4678]$/.test(e.code || "");
 
-    const onKeyDown = async (e: KeyboardEvent) => {
-      if (e.repeat || phaseRef.current !== "hit") return;
-      const pad = normalize(e);
-      if (pad == null) return;
-      e.preventDefault();
-      e.stopPropagation();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
 
-      const seq = currentComboRef.current;
-      const idx = hitIdxRef.current;
-      const expected = seq[idx];
+      const ph = phaseRef.current;
+      if (ph === "prep" || ph === "rest") {
+        if (
+          isNavKey(e) ||
+          /^[1-8]$/.test(e.key) ||
+          /^Numpad[1-8]$/.test(e.code || "")
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        return; // StartScreen continues itself
+      }
 
-      if (pad === expected) {
-        raspiLights?.flashPad?.(pad, GREEN, 250);
-        reportResult({ correct: true, pad, idx });
+      if (ph === "playing") {
+        const pad = normalizeKeyToPad(e);
+        if (pad == null) {
+          if (isNavKey(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
 
-        setScore((s) => s + BASE_HIT_POINTS + COMBO_BONUS_PER_HIT * idx);
-        const nextIdx = idx + 1;
-        setHitIdx(nextIdx);
-        setActiveIndex(nextIdx);
-
-        if (nextIdx >= seq.length) {
-          setCombosCleared((c) => {
+        const active = activePadRef.current!;
+        if (pad === active) {
+          const add = BASE_HIT_POINTS + COMBO_BONUS_PER_HIT * comboRef.current;
+          setScore((s) => s + add);
+          setCombo((c) => {
             const nc = c + 1;
-            setMaxCombo((m) => Math.max(m, nc));
+            setMaxCombo((m) => (nc > m ? nc : m));
+            comboRef.current = nc;
             return nc;
           });
-          raspiLights?.onAll?.(GREEN);
-          await sleep(BETWEEN_COMBOS_PAUSE_MS);
-          raspiLights?.offAll?.();
-
-          if (phaseRef.current !== "hit") return;
-          const next = await getComboFromRaspi();
-          setCurrentCombo(next);
-          setShowIdx(0);
-          setHitIdx(0);
-          setActiveIndex(0);
-          setPhase("show");
-        }
-      } else {
-        setMisses((m) => m + 1);
-        setMissFlash(true);
-        raspiLights?.flashPad?.(pad, RED, 350);
-        setTimeout(() => setMissFlash(false), 220);
-        reportResult({ correct: false, pad, idx });
-
-        if (level === "Advanced" || level === "Expert") {
-          setHitIdx(0);
-          setActiveIndex(0);
+          setMissFlash(false);
+          goNext();
+        } else {
+          setMisses((m) => m + 1);
+          setCombo(0);
+          comboRef.current = 0;
+          setMissFlash(true);
+          setTimeout(() => setMissFlash(false), 220);
         }
       }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [phase, level, getComboFromRaspi, raspiLights, reportResult]);
+  }, [goNext]);
 
-  // Exit / End
+  // Reset step whenever we enter/re-enter playing
+  useEffect(() => {
+    if (phase === "playing") setStepIdx(0);
+  }, [phase]);
+
+  // -------- Navigation: EndScreen / Exit -> Start menu --------
   const navigate = useNavigate();
-  const goToMenu = useCallback(() => navigate("/modes"), [navigate]);
+  const MENU_PATH = "/modes"; // 👈 your start menu route
 
-  const seqForViz = useMemo(
-    () => (currentCombo.length ? currentCombo : [1]),
-    [currentCombo]
-  );
+  const goToMenu = useCallback(() => {
+    navigate(MENU_PATH);
+  }, [navigate]);
 
+  // -------- End screen --------
+  if (phase === "ended") {
+    return (
+      <EndScreen
+        score={score}
+        misses={misses}
+        maxCombo={maxCombo}
+        avgHR={avgHR}
+        maxHR={maxHR}
+        onRestart={goToMenu} // ✅ navigates to start menu
+      />
+    );
+  }
+
+  // -------- UI --------
   return (
     <div
       style={{
@@ -308,53 +246,57 @@ const PlayCombo: React.FC<PlayComboProps> = ({
         gap: 18,
       }}
     >
-      {/* HUD */}
+      {/* Header strip */}
       <div
         style={{
           width: "100%",
-          maxWidth: 980,
+          maxWidth: 920,
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
           gap: 12,
           alignItems: "center",
         }}
       >
-        <div>
+        <div style={{ opacity: 0.85 }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Level</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{level}</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>Intermediate</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Aura Points</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{auraPoints}</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Time Left</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Current Heart Rate</div>
           <div style={{ fontWeight: 800, fontSize: 18 }}>
-            {fmtMMSS(timeLeft)}
+            {currentHR ?? "—"} bpm
+          </div>
+        </div>
+        <div style={{ textAlign: "right", opacity: 0.85 }}>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Session</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>
+            Set {setIdx + 1}/{sets.length}
           </div>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats row */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3,1fr)",
+          gridTemplateColumns: "repeat(5, 1fr)",
           gap: 12,
           width: "100%",
-          maxWidth: 980,
+          maxWidth: 920,
         }}
       >
         <Stat label="Score" value={score} />
         <Stat label="Misses" value={misses} />
-        <Stat label="Combos Cleared" value={combosCleared} />
+        <Stat label="Combo" value={combo} />
+        <Stat label="Avg HR" value={avgHR ?? "—"} />
+        <Stat label="Max HR" value={maxHR ?? "—"} />
       </div>
 
-      {/* Main card */}
+      {/* Main area */}
       <div
         style={{
           width: "100%",
-          maxWidth: 980,
+          maxWidth: 920,
           border: "1px solid #1f2937",
           borderRadius: 16,
           padding: 20,
@@ -366,79 +308,48 @@ const PlayCombo: React.FC<PlayComboProps> = ({
           gap: 18,
         }}
       >
-        {phase === "setup" && (
+        {phase === "prep" && (
           <StartScreen
-            level={level}
-            auraPoints={auraPoints}
-            durationSec={durationSec}
-            onDurationChange={setDurationSec}
-            onLevelChange={setLevel}
-            onStart={() => startGame()}
-            onExit={goToMenu}
+            duration={PREP_SECONDS}
+            onStart={() => setPhase("playing")}
+            onExit={goToMenu} // ✅ Exit returns to menu immediately
+            level="Intermediate"
+            heartRate={currentHR}
           />
         )}
 
-        {(phase === "show" || phase === "hit") && (
+        {phase === "rest" && (
+          <>
+            <h2 style={{ margin: 0, color: "#60a5fa" }}>Rest</h2>
+            <div style={{ fontSize: 56, fontWeight: 900 }}>{restLeft}s</div>
+            <p style={{ opacity: 0.7 }}>Next set starts automatically.</p>
+          </>
+        )}
+
+        {phase === "playing" && (
           <>
             <PadVisualizer
-              sequence={seqForViz}
-              activeIndex={phase === "show" ? showIdx : hitIdx}
-              onAdvance={() => {}}
+              sequence={currentSet}
+              activeIndex={stepIdx}
+              onAdvance={() => {
+                /* scoring stays on 1–8 keys only */
+              }}
               missFlash={missFlash}
-              mode={phase === "show" ? "show" : "hit"}
             />
-            <p style={{ opacity: 0.8, marginTop: 6 }}>
-              {phase === "show"
-                ? "Watch the pads (Show Phase)"
-                : "Repeat the combo (Hit Phase)"}
+            <p style={{ opacity: 0.7, marginTop: 6 }}>
+              Hit pads with <b>1–8</b> (number row or numpad). Menu navigation
+              is locked.
             </p>
           </>
         )}
       </div>
-
-      {/* Exit below box */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 980,
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
-        <button onClick={goToMenu} style={exitBtnInline}>
-          Exit
-        </button>
-      </div>
-
-      {/* End overlay */}
-      {phase === "ended" && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "#000",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <EndScreen
-            score={score}
-            misses={misses}
-            maxCombo={maxCombo}
-            avgHR={null}
-            maxHR={null}
-            onRestart={goToMenu}
-          />
-        </div>
-      )}
     </div>
   );
 };
 
 export default PlayCombo;
 
+// ------- Small UI helpers -------
 const Stat: React.FC<{ label: string; value: number | string }> = ({
   label,
   value,
@@ -456,18 +367,3 @@ const Stat: React.FC<{ label: string; value: number | string }> = ({
     <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
   </div>
 );
-
-const exitBtnInline: React.CSSProperties = {
-  marginTop: 12,
-  padding: "10px 16px",
-  background: "transparent",
-  color: "#e5e7eb",
-  border: "1px solid #374151",
-  borderRadius: 10,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-function sleep(ms: number) {
-  return new Promise((res) => setTimeout(res, ms));
-}
