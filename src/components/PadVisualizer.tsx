@@ -1,12 +1,24 @@
-import React, { useEffect, useState } from "react";
+// PadVisualizer.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { usePadInput } from "../apis/RigInputProvider"; // ← add this import
 
-interface PadVisualizerProps {
-  sequence: number[];
-  activeIndex: number;
-  onAdvance: () => void;
-  missFlash?: boolean; // 👈 new: trigger a red miss flash on current pad
-}
+type PadVisualizerProps = {
+  /** If provided, component becomes controlled and will just mirror this pad (1..8) */
+  activePad?: number | null;
+  /** How long each flash lasts (ms) */
+  flashMs?: number;
+  /** Listen to keyboard keys 1..8 */
+  listenKeys?: boolean;
+  /** Listen to a window CustomEvent with detail { pad: number } */
+  listenCustomEvent?: boolean;
+  /** Name of the CustomEvent to listen to */
+  customEventName?: string;
+  /** Optional remapper for keyboard -> pad number (return null to ignore) */
+  mapKeyToPad?: (e: KeyboardEvent) => number | null;
+  /** Listen to MQTT via RigInputProvider */
+  listenMqtt?: boolean;
+};
 
 const padLayout: (number | null)[][] = [
   [1, 2, 3],
@@ -14,9 +26,11 @@ const padLayout: (number | null)[][] = [
   [7, null, 8],
 ];
 
+const BOX = 96;
+
 const boxStyle: CSSProperties = {
-  width: 96,
-  height: 96,
+  width: BOX,
+  height: BOX,
   borderRadius: 16,
   border: "4px solid #4b5563",
   background: "#111827",
@@ -36,7 +50,7 @@ const activeBoxStyle: CSSProperties = {
   color: "#0b1b12",
 };
 
-const spacerStyle: CSSProperties = { width: 96, height: 96 };
+const spacerStyle: CSSProperties = { width: BOX, height: BOX };
 const rowStyle: CSSProperties = {
   display: "flex",
   gap: 16,
@@ -49,52 +63,98 @@ const rootStyle: CSSProperties = {
   gap: 24,
 };
 
+const defaultMapKeyToPad = (e: KeyboardEvent): number | null => {
+  const n = parseInt(e.key, 10);
+  return n >= 1 && n <= 8 ? n : null;
+};
+
 const PadVisualizer: React.FC<PadVisualizerProps> = ({
-  sequence,
-  activeIndex,
-  onAdvance,
-  missFlash,
+  activePad: controlledActivePad,
+  flashMs = 150,
+  listenKeys = true,
+  listenCustomEvent = true,
+  customEventName = "pad-hit",
+  mapKeyToPad = defaultMapKeyToPad,
+  listenMqtt = true, // ← default ON
 }) => {
-  const activePad = sequence[activeIndex];
-  const [flash, setFlash] = useState(false);
+  const { addListener, connected, rigId } = usePadInput(); // ← use MQTT ctx
+  const [uncontrolledPad, setUncontrolledPad] = useState<number | null>(null);
+  const timerRef = useRef<number | null>(null);
 
+  const isControlled = useMemo(
+    () => controlledActivePad !== undefined,
+    [controlledActivePad]
+  );
+  const activePad = isControlled ? controlledActivePad! : uncontrolledPad;
+
+  const flash = (pad: number) => {
+    if (pad < 1 || pad > 8) return;
+    // clear previous timer
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setUncontrolledPad(pad);
+    timerRef.current = window.setTimeout(() => {
+      setUncontrolledPad(null);
+      timerRef.current = null;
+    }, flashMs) as unknown as number;
+  };
+
+  // Keyboard listener
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === " " || e.key === "Enter") onAdvance();
+    if (!listenKeys || isControlled) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const pad = mapKeyToPad(e);
+      if (pad) flash(pad);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onAdvance]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [listenKeys, isControlled, mapKeyToPad, flashMs]);
 
-  // small green flash when step changes
+  // Custom event listener
   useEffect(() => {
-    setFlash(true);
-    const t = setTimeout(() => setFlash(false), 220);
-    return () => clearTimeout(t);
-  }, [activeIndex]);
+    if (!listenCustomEvent || isControlled) return;
+    const onPadEvent = (e: Event) => {
+      const ce = e as CustomEvent<{ pad?: number }>;
+      const pad = ce.detail?.pad;
+      if (typeof pad === "number") flash(pad);
+    };
+    window.addEventListener(customEventName, onPadEvent as EventListener);
+    return () =>
+      window.removeEventListener(customEventName, onPadEvent as EventListener);
+  }, [listenCustomEvent, isControlled, customEventName, flashMs]);
+
+  // MQTT listener via RigInputProvider
+  useEffect(() => {
+    if (!listenMqtt || isControlled) return;
+    // subscribe; addListener returns an unsubscribe
+    const unsubscribe = addListener?.((e) => {
+      if (typeof e.pad === "number") flash(e.pad);
+    });
+    return () => {
+      try {
+        unsubscribe?.();
+      } catch {}
+    };
+  }, [listenMqtt, isControlled, addListener, flashMs]);
+
+  // Cleanup timer on unmount
+  useEffect(
+    () => () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    },
+    []
+  );
 
   return (
     <div style={rootStyle}>
       <style>{`
-        @keyframes padPulse {
-          0%   { box-shadow: 0 0 14px rgba(16,185,129,0.35), 0 0 0 rgba(16,185,129,0); transform: scale(1.00); }
-          50%  { box-shadow: 0 0 28px rgba(16,185,129,0.85), 0 0 60px rgba(16,185,129,0.30); transform: scale(1.04); }
-          100% { box-shadow: 0 0 14px rgba(16,185,129,0.35), 0 0 0 rgba(16,185,129,0); transform: scale(1.00); }
-        }
         @keyframes padFlash {
           0%   { filter: brightness(1.7); transform: scale(1.08); }
           100% { filter: brightness(1.0); transform: scale(1.00); }
         }
-        @keyframes padMiss {
-          0%   { box-shadow: 0 0 20px rgba(239,68,68,0.85); transform: translateX(0) scale(1.02); }
-          25%  { transform: translateX(-5px) scale(1.02); }
-          50%  { transform: translateX(5px) scale(1.02); }
-          75%  { transform: translateX(-3px) scale(1.02); }
-          100% { box-shadow: 0 0 0 rgba(239,68,68,0); transform: translateX(0) scale(1.00); }
-        }
-        .pad-active { animation: padPulse 1.2s ease-in-out infinite; }
-        .pad-flash  { animation: padFlash 180ms ease-out; }
-        .pad-miss   { animation: padMiss 260ms ease-out; background: #ef4444 !important; border-color: #b91c1c !important; color: #fff !important; }
+        .pad-active { animation: padFlash 180ms ease-out; }
       `}</style>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -103,21 +163,11 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
             {row.map((pad, cIdx) => {
               if (!pad) return <div key={cIdx} style={spacerStyle} />;
               const isActive = pad === activePad;
-              const classes = [
-                isActive ? "pad-active" : "",
-                isActive && flash ? "pad-flash" : "",
-                isActive && missFlash ? "pad-miss" : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
               return (
                 <div
                   key={cIdx}
-                  className={classes}
-                  style={{
-                    ...boxStyle,
-                    ...(isActive ? activeBoxStyle : {}),
-                  }}
+                  className={isActive ? "pad-active" : ""}
+                  style={{ ...boxStyle, ...(isActive ? activeBoxStyle : {}) }}
                 >
                   {pad}
                 </div>
@@ -126,6 +176,24 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Little status hint when uncontrolled */}
+      {!isControlled && (
+        <p style={{ color: "#9ca3af", marginTop: 12, textAlign: "center" }}>
+          {[
+            listenMqtt
+              ? `MQTT ${connected ? "● connected" : "○ offline"} (${
+                  rigId || "–"
+                })`
+              : null,
+            listenKeys ? "Keys 1–8" : null,
+            listenCustomEvent ? `CustomEvent "${customEventName}"` : null,
+          ]
+            .filter(Boolean)
+            .join(" • ")}{" "}
+          will flash pads
+        </p>
+      )}
     </div>
   );
 };
