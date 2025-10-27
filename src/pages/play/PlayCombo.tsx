@@ -7,13 +7,11 @@ import React, {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import PadVisualizer from "../../components/PadVisualizer";
 import EndScreen from "../../components/EndScreen";
-import StartScreen from "../../components/StartScreenCombo";
-import { useHeartRate } from "../../apis/HeartRateProvider"; // ✅ global HRM
+import StartScreen, { type Level } from "../../components/StartScreenCombo";
+import { useHeartRate } from "../../apis/HeartRateProvider";
 
 // ------- Config -------
-const PREP_SECONDS = 20;
 const REST_SECONDS = 5;
 
 // Replace with the JSON you pass for the current session
@@ -49,25 +47,30 @@ const PlayCombo: React.FC<PlayComboProps> = ({
   const [maxCombo, setMaxCombo] = useState(0);
   const [missFlash, setMissFlash] = useState(false);
 
+  // NEW: user selections
+  const [selectedLevel, setSelectedLevel] = useState<Level>("Intermediate");
+  const [workoutTotalSec, setWorkoutTotalSec] = useState<number | null>(null);
+  const [workoutLeftSec, setWorkoutLeftSec] = useState<number | null>(null);
+
   const currentSet = sets[setIdx] ?? [];
   const activePad = currentSet[stepIdx];
 
-  // -------- Global Heart Rate (persisted across app) --------
-  const { bpm: currentHR } = useHeartRate(); // live BPM from provider
+  // -------- Global Heart Rate --------
+  const { bpm: currentHR } = useHeartRate();
   const hrSamplesRef = useRef<number[]>([]);
   const phaseRef = useRef<Phase>("prep");
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Collect per-session samples only while playing
+  // HR samples while playing
   useEffect(() => {
     if (phase === "playing" && currentHR != null) {
       hrSamplesRef.current.push(currentHR);
     }
   }, [phase, currentHR]);
 
-  // Live avg/max HR for this session
+  // Live avg/max HR
   const { avgHR, maxHR } = useMemo(() => {
     const arr = hrSamplesRef.current;
     if (!arr.length)
@@ -77,8 +80,19 @@ const PlayCombo: React.FC<PlayComboProps> = ({
     return { avgHR: avg, maxHR: max };
   }, [currentHR, phase === "ended"]);
 
+  // -------- Workout countdown (global) --------
+  useEffect(() => {
+    if (phase !== "playing" || workoutLeftSec == null) return;
+    if (workoutLeftSec <= 0) {
+      setPhase("ended");
+      return;
+    }
+    const t = setTimeout(() => setWorkoutLeftSec((s) => (s ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, workoutLeftSec]);
+
   // -------- Set progression (stage + commit) --------
-  const nextSetIdxRef = useRef<number | null>(null); // stage next set here
+  const nextSetIdxRef = useRef<number | null>(null);
 
   // Rest timer: commits staged set index exactly once
   useEffect(() => {
@@ -97,29 +111,28 @@ const PlayCombo: React.FC<PlayComboProps> = ({
     return () => clearTimeout(t);
   }, [phase, restLeft]);
 
-  // Single path to advance within a set, with debounce/lock
+  // Single path to advance within a set
   const transitioningRef = useRef(false);
   const lastAdvanceAtRef = useRef(0);
   const goNext = useCallback(() => {
     const now = performance.now();
     if (transitioningRef.current) return;
-    if (now - lastAdvanceAtRef.current < 40) return; // debounce
+    if (now - lastAdvanceAtRef.current < 40) return;
     lastAdvanceAtRef.current = now;
 
     setStepIdx((i) => {
       const next = i + 1;
       if (next >= currentSet.length) {
+        // If workout timer is still running, either rest or end
         if (setIdx + 1 >= sets.length) {
           setPhase("ended");
         } else {
-          // Stage next set; do NOT increment setIdx now
           nextSetIdxRef.current = setIdx + 1;
           transitioningRef.current = true;
           setPhase("rest");
           setTimeout(() => {
             transitioningRef.current = false;
           }, 0);
-          // keep step frozen until phase changes
         }
         return i;
       }
@@ -127,7 +140,7 @@ const PlayCombo: React.FC<PlayComboProps> = ({
     });
   }, [currentSet.length, setIdx, sets.length]);
 
-  // -------- Keyboard handling (mount once) --------
+  // -------- Keyboard handling --------
   const activePadRef = useRef<number | undefined>(undefined);
   const comboRef = useRef(0);
   useEffect(() => {
@@ -164,7 +177,7 @@ const PlayCombo: React.FC<PlayComboProps> = ({
           e.stopPropagation();
           return;
         }
-        return; // StartScreen continues itself
+        return;
       }
 
       if (ph === "playing") {
@@ -210,9 +223,9 @@ const PlayCombo: React.FC<PlayComboProps> = ({
     if (phase === "playing") setStepIdx(0);
   }, [phase]);
 
-  // -------- Navigation: EndScreen / Exit -> Start menu --------
+  // -------- Navigation --------
   const navigate = useNavigate();
-  const MENU_PATH = "/modes"; // 👈 your start menu route
+  const MENU_PATH = "/modes";
 
   const goToMenu = useCallback(() => {
     navigate(MENU_PATH);
@@ -227,10 +240,19 @@ const PlayCombo: React.FC<PlayComboProps> = ({
         maxCombo={maxCombo}
         avgHR={avgHR}
         maxHR={maxHR}
-        onRestart={goToMenu} // ✅ navigates to start menu
+        onRestart={goToMenu}
       />
     );
+    // (Optionally pass selectedLevel/workout time to EndScreen if you show them there)
   }
+
+  // Helper to format remaining workout time
+  const fmtTime = (sec: number | null) => {
+    if (sec == null) return "—";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   // -------- UI --------
   return (
@@ -259,7 +281,7 @@ const PlayCombo: React.FC<PlayComboProps> = ({
       >
         <div style={{ opacity: 0.85 }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Level</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>Intermediate</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{selectedLevel}</div>
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Current Heart Rate</div>
@@ -268,9 +290,12 @@ const PlayCombo: React.FC<PlayComboProps> = ({
           </div>
         </div>
         <div style={{ textAlign: "right", opacity: 0.85 }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Session</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            Workout Left{" "}
+            {workoutTotalSec ? `(${Math.floor(workoutTotalSec / 60)}m)` : ""}
+          </div>
           <div style={{ fontWeight: 800, fontSize: 18 }}>
-            Set {setIdx + 1}/{sets.length}
+            {fmtTime(workoutLeftSec)}
           </div>
         </div>
       </div>
@@ -310,11 +335,21 @@ const PlayCombo: React.FC<PlayComboProps> = ({
       >
         {phase === "prep" && (
           <StartScreen
-            duration={PREP_SECONDS}
-            onStart={() => setPhase("playing")}
-            onExit={goToMenu} // ✅ Exit returns to menu immediately
-            level="Intermediate"
             heartRate={currentHR}
+            onStart={({ level, minutes }) => {
+              setSelectedLevel(level);
+              const total = minutes * 60;
+              setWorkoutTotalSec(total);
+              setWorkoutLeftSec(total);
+              setPhase("playing");
+            }}
+            onExit={goToMenu}
+            defaultLevel={selectedLevel}
+            defaultMinutes={
+              workoutTotalSec
+                ? Math.max(1, Math.round(workoutTotalSec / 60))
+                : 10
+            }
           />
         )}
 
@@ -328,14 +363,31 @@ const PlayCombo: React.FC<PlayComboProps> = ({
 
         {phase === "playing" && (
           <>
-            <PadVisualizer
-              sequence={currentSet}
-              activeIndex={stepIdx}
-              onAdvance={() => {
-                /* scoring stays on 1–8 keys only */
+            {/* Simple placeholder instead of PadVisualizer */}
+            <div
+              style={{
+                width: "100%",
+                minHeight: 260,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1px dashed #1f2937",
+                borderRadius: 12,
               }}
-              missFlash={missFlash}
-            />
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 40,
+                  fontWeight: 900,
+                  letterSpacing: 0.5,
+                  opacity: missFlash ? 0.65 : 1,
+                  transition: "opacity 150ms linear",
+                }}
+              >
+                Game ongoing
+              </h2>
+            </div>
             <p style={{ opacity: 0.7, marginTop: 6 }}>
               Hit pads with <b>1–8</b> (number row or numpad). Menu navigation
               is locked.

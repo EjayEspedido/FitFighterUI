@@ -34,7 +34,7 @@ export default function Modes() {
       if (e.repeat) return;
       if (e.key === "4" || e.key === "6") moveUp(); // UP
       else if (e.key === "7" || e.key === "8") moveDown(); // DOWN
-      else if (e.key === "5" || e.key === "Enter" || e.key === " ") confirm(); // CONFIRM
+      else if (e.key === "2" || e.key === "Enter" || e.key === " ") confirm(); // CONFIRM
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -70,7 +70,7 @@ export default function Modes() {
       </div>
 
       <div className="keyguide">
-        <b>4/6</b> = Up • <b>7/8</b> = Down • <b>5</b> = Confirm
+        <b>4/6</b> = Up • <b>7/8</b> = Down • <b>2</b> = Confirm
       </div>
     </div>
   );
