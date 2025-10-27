@@ -7,415 +7,455 @@ import React, {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import EndScreen from "../../components/EndScreen";
-import StartScreen, { type Level } from "../../components/StartScreenCombo";
+import StartScreenCombo, {
+  type Level,
+} from "../../components/StartScreenCombo";
 import { useHeartRate } from "../../apis/HeartRateProvider";
+import { usePadInput } from "../../apis/RigInputProvider";
+import { sendStartParams } from "../../apis/gameControl";
+import PadVisualizer from "../../components/PadVisualizer";
 
-// ------- Config -------
-const REST_SECONDS = 5;
-
-// Replace with the JSON you pass for the current session
-const DEFAULT_SESSION_SETS: number[][] = [
-  [1, 1, 3],
-  [1, 3, 2],
-];
-
-// Scoring
+// ---- Adjustable constants ----
+const TICK_MS = 250; // gameplay timer tick
+const PREP_SECONDS = 5; // pre-roll countdown
 const BASE_HIT_POINTS = 100;
 const COMBO_BONUS_PER_HIT = 10;
 
-// ------- Types -------
-type Phase = "prep" | "playing" | "rest" | "ended";
+type Phase = "start" | "prep" | "playing" | "end";
 
-interface PlayComboProps {
-  sets?: number[][];
-}
+export default function PlayCombo() {
+  const nav = useNavigate();
+  const { bpm: currentHR } = useHeartRate(); // ← HRM (Magene / Web Bluetooth)
+  const { rigId, last: lastPad } = usePadInput();
+  const [phase, setPhase] = useState<Phase>("start");
 
-const PlayCombo: React.FC<PlayComboProps> = ({
-  sets = DEFAULT_SESSION_SETS,
-}) => {
-  // -------- Core state --------
-  const [phase, setPhase] = useState<Phase>("prep");
-  const [restLeft, setRestLeft] = useState(REST_SECONDS);
+  // user selections
+  const [selectedLevel, setSelectedLevel] = useState<Level>("Beginner");
+  const [workoutTotalSec, setWorkoutTotalSec] = useState<number>(0);
+  const [workoutLeftSec, setWorkoutLeftSec] = useState<number>(0);
+  const [isEndless, setIsEndless] = useState<boolean>(false);
 
-  const [setIdx, setSetIdx] = useState(0);
-  const [stepIdx, setStepIdx] = useState(0);
-
+  // scoring
   const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [hits, setHits] = useState(0);
   const [misses, setMisses] = useState(0);
-  const [combo, setCombo] = useState(0);
-  const [maxCombo, setMaxCombo] = useState(0);
-  const [missFlash, setMissFlash] = useState(false);
 
-  // NEW: user selections
-  const [selectedLevel, setSelectedLevel] = useState<Level>("Intermediate");
-  const [workoutTotalSec, setWorkoutTotalSec] = useState<number | null>(null);
-  const [workoutLeftSec, setWorkoutLeftSec] = useState<number | null>(null);
+  // prep countdown
+  const [prepLeft, setPrepLeft] = useState<number>(PREP_SECONDS);
 
-  const currentSet = sets[setIdx] ?? [];
-  const activePad = currentSet[stepIdx];
+  // leave-confirm modal
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const pendingLeaveAction = useRef<null | (() => void)>(null);
 
-  // -------- Global Heart Rate --------
-  const { bpm: currentHR } = useHeartRate();
-  const hrSamplesRef = useRef<number[]>([]);
-  const phaseRef = useRef<Phase>("prep");
+  // =========================================================
+  // Handle pad hits (basic scorer for now—replace with combos later)
+  // =========================================================
+  const onHit = useCallback(
+    (pad: number) => {
+      setHits((h) => h + 1);
+      setStreak((s) => {
+        const ns = s + 1;
+        setMaxStreak((m) => Math.max(m, ns));
+        return ns;
+      });
+      setScore((sc) => sc + BASE_HIT_POINTS + COMBO_BONUS_PER_HIT * streak);
+    },
+    [streak]
+  );
+
+  // Apply scoring on new pad events while playing
+  const lastHitTsRef = useRef<number>(0);
   useEffect(() => {
-    phaseRef.current = phase;
+    if (!lastPad) return;
+    if (!lastPad.ts || lastPad.ts === lastHitTsRef.current) return;
+    lastHitTsRef.current = lastPad.ts;
+    if (phase === "playing") onHit(lastPad.pad);
+  }, [lastPad, phase, onHit]);
+
+  // =========================================================
+  // Timer for gameplay
+  // =========================================================
+  useEffect(() => {
+    if (phase !== "playing") return;
+    if (isEndless) return;
+
+    const id = setInterval(() => {
+      setWorkoutLeftSec((sec) => {
+        const next = Math.max(0, sec - TICK_MS / 1000);
+        if (next <= 0) {
+          clearInterval(id);
+          setPhase("end");
+        }
+        return next;
+      });
+    }, TICK_MS);
+
+    return () => clearInterval(id);
+  }, [phase, isEndless]);
+
+  // =========================================================
+  // PREP countdown
+  // =========================================================
+  useEffect(() => {
+    if (phase !== "prep") return;
+    setPrepLeft(PREP_SECONDS);
+    const id = setInterval(() => {
+      setPrepLeft((s) => {
+        const n = s - 1;
+        if (n <= 0) {
+          clearInterval(id);
+          setPhase("playing");
+        }
+        return n;
+      });
+    }, 1000);
+    return () => clearInterval(id);
   }, [phase]);
 
-  // HR samples while playing
-  useEffect(() => {
-    if (phase === "playing" && currentHR != null) {
-      hrSamplesRef.current.push(currentHR);
-    }
-  }, [phase, currentHR]);
+  // =========================================================
+  // Leave helpers (Back / End) with confirm
+  // =========================================================
+  const reallyLeaveToModes = useCallback(() => {
+    setConfirmOpen(false);
+    pendingLeaveAction.current = null;
+    nav("/modes");
+  }, [nav]);
 
-  // Live avg/max HR
-  const { avgHR, maxHR } = useMemo(() => {
-    const arr = hrSamplesRef.current;
-    if (!arr.length)
-      return { avgHR: null as number | null, maxHR: null as number | null };
-    const max = arr.reduce((a, b) => (b > a ? b : a), arr[0]);
-    const avg = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
-    return { avgHR: avg, maxHR: max };
-  }, [currentHR, phase === "ended"]);
-
-  // -------- Workout countdown (global) --------
-  useEffect(() => {
-    if (phase !== "playing" || workoutLeftSec == null) return;
-    if (workoutLeftSec <= 0) {
-      setPhase("ended");
-      return;
-    }
-    const t = setTimeout(() => setWorkoutLeftSec((s) => (s ?? 1) - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, workoutLeftSec]);
-
-  // -------- Set progression (stage + commit) --------
-  const nextSetIdxRef = useRef<number | null>(null);
-
-  // Rest timer: commits staged set index exactly once
-  useEffect(() => {
-    if (phase !== "rest") return;
-    if (restLeft <= 0) {
-      if (nextSetIdxRef.current != null) {
-        setSetIdx(nextSetIdxRef.current);
-        nextSetIdxRef.current = null;
+  const requestLeave = useCallback(
+    (action: () => void) => {
+      // Only confirm if we are mid-session
+      if (phase === "prep" || phase === "playing") {
+        pendingLeaveAction.current = action;
+        setConfirmOpen(true);
+      } else {
+        action();
       }
-      setStepIdx(0);
-      setRestLeft(REST_SECONDS);
-      setPhase("playing");
-      return;
-    }
-    const t = setTimeout(() => setRestLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, restLeft]);
+    },
+    [phase]
+  );
 
-  // Single path to advance within a set
-  const transitioningRef = useRef(false);
-  const lastAdvanceAtRef = useRef(0);
-  const goNext = useCallback(() => {
-    const now = performance.now();
-    if (transitioningRef.current) return;
-    if (now - lastAdvanceAtRef.current < 40) return;
-    lastAdvanceAtRef.current = now;
+  const onExit = useCallback(() => {
+    requestLeave(() => reallyLeaveToModes());
+  }, [requestLeave, reallyLeaveToModes]);
 
-    setStepIdx((i) => {
-      const next = i + 1;
-      if (next >= currentSet.length) {
-        // If workout timer is still running, either rest or end
-        if (setIdx + 1 >= sets.length) {
-          setPhase("ended");
-        } else {
-          nextSetIdxRef.current = setIdx + 1;
-          transitioningRef.current = true;
-          setPhase("rest");
-          setTimeout(() => {
-            transitioningRef.current = false;
-          }, 0);
-        }
-        return i;
-      }
-      return next;
-    });
-  }, [currentSet.length, setIdx, sets.length]);
+  const endSession = useCallback(() => {
+    requestLeave(() => setPhase("end"));
+  }, [requestLeave]);
 
-  // -------- Keyboard handling --------
-  const activePadRef = useRef<number | undefined>(undefined);
-  const comboRef = useRef(0);
+  // Keyboard: 5/Escape to back (with confirm), 0 to end now (with confirm)
   useEffect(() => {
-    activePadRef.current = activePad;
-  }, [activePad]);
-  useEffect(() => {
-    comboRef.current = combo;
-  }, [combo]);
-
-  useEffect(() => {
-    const normalizeKeyToPad = (e: KeyboardEvent): number | null => {
-      if (/^[1-8]$/.test(e.key)) return parseInt(e.key, 10);
-      const m = /^Numpad([1-8])$/.exec(e.code || "");
-      return m ? parseInt(m[1], 10) : null;
-    };
-    const isNavKey = (e: KeyboardEvent) =>
-      e.key === "4" ||
-      e.key === "6" ||
-      e.key === "7" ||
-      e.key === "8" ||
-      /^Numpad[4678]$/.test(e.code || "");
-
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-
-      const ph = phaseRef.current;
-      if (ph === "prep" || ph === "rest") {
-        if (
-          isNavKey(e) ||
-          /^[1-8]$/.test(e.key) ||
-          /^Numpad[1-8]$/.test(e.code || "")
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-        return;
-      }
-
-      if (ph === "playing") {
-        const pad = normalizeKeyToPad(e);
-        if (pad == null) {
-          if (isNavKey(e)) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-
-        const active = activePadRef.current!;
-        if (pad === active) {
-          const add = BASE_HIT_POINTS + COMBO_BONUS_PER_HIT * comboRef.current;
-          setScore((s) => s + add);
-          setCombo((c) => {
-            const nc = c + 1;
-            setMaxCombo((m) => (nc > m ? nc : m));
-            comboRef.current = nc;
-            return nc;
-          });
-          setMissFlash(false);
-          goNext();
-        } else {
-          setMisses((m) => m + 1);
-          setCombo(0);
-          comboRef.current = 0;
-          setMissFlash(true);
-          setTimeout(() => setMissFlash(false), 220);
-        }
+      if (e.key === "5" || e.key === "Escape") {
+        onExit();
+      } else if (e.key === "0") {
+        endSession();
       }
     };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onExit, endSession]);
 
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [goNext]);
+  // =========================================================
+  // Start handler from StartScreen
+  // =========================================================
+  const handleStart = useCallback(
+    async ({
+      level,
+      minutes,
+      isEndless: endless,
+    }: {
+      level: Level;
+      minutes: number;
+      isEndless: boolean;
+    }) => {
+      setSelectedLevel(level);
+      setIsEndless(endless);
 
-  // Reset step whenever we enter/re-enter playing
-  useEffect(() => {
-    if (phase === "playing") setStepIdx(0);
-  }, [phase]);
+      const total = Math.max(1, minutes) * 60;
+      setWorkoutTotalSec(endless ? 0 : total);
+      setWorkoutLeftSec(endless ? 0 : total);
 
-  // -------- Navigation --------
-  const navigate = useNavigate();
-  const MENU_PATH = "/modes";
+      // 🚀 Send params to Raspberry Pi (Combo = gameMode 1)
+      if (rigId) {
+        await sendStartParams(rigId, {
+          userLevel: level,
+          gameMode: 1,
+          total_time: total,
+          isEndless: endless,
+        });
+      }
 
-  const goToMenu = useCallback(() => {
-    navigate(MENU_PATH);
-  }, [navigate]);
+      // reset scoring on each start
+      setScore(0);
+      setStreak(0);
+      setMaxStreak(0);
+      setHits(0);
+      setMisses(0);
 
-  // -------- End screen --------
-  if (phase === "ended") {
-    return (
-      <EndScreen
-        score={score}
-        misses={misses}
-        maxCombo={maxCombo}
-        avgHR={avgHR}
-        maxHR={maxHR}
-        onRestart={goToMenu}
-      />
-    );
-    // (Optionally pass selectedLevel/workout time to EndScreen if you show them there)
-  }
+      setPhase(PREP_SECONDS > 0 ? "prep" : "playing");
+    },
+    [rigId]
+  );
 
-  // Helper to format remaining workout time
-  const fmtTime = (sec: number | null) => {
-    if (sec == null) return "—";
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${String(s).padStart(2, "0")}`;
-  };
-
-  // -------- UI --------
-  return (
+  // =========================================================
+  // UI
+  // =========================================================
+  const header = (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#030712",
-        color: "#e5e7eb",
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: 24,
-        gap: 18,
+        gap: 16,
+        alignItems: "baseline",
+        flexWrap: "wrap",
       }}
     >
-      {/* Header strip */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 920,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
-        <div style={{ opacity: 0.85 }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Level</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{selectedLevel}</div>
-        </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Current Heart Rate</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>
-            {currentHR ?? "—"} bpm
-          </div>
-        </div>
-        <div style={{ textAlign: "right", opacity: 0.85 }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Workout Left{" "}
-            {workoutTotalSec ? `(${Math.floor(workoutTotalSec / 60)}m)` : ""}
-          </div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>
-            {fmtTime(workoutLeftSec)}
-          </div>
-        </div>
-      </div>
+      <h2 style={{ margin: 0, fontWeight: 900 }}>Combo Mode</h2>
+      <span>
+        Level: <b>{selectedLevel}</b>
+      </span>
+      <span>
+        HR: <b>{currentHR ?? "—"}</b> bpm
+      </span>
+      <span>
+        Score: <b>{score}</b>
+      </span>
+      <span>
+        Streak: <b>{streak}</b> (Max {maxStreak})
+      </span>
+      {!isEndless && (
+        <span>
+          Time left: <b>{Math.ceil(workoutLeftSec)}</b>s
+        </span>
+      )}
+    </div>
+  );
 
-      {/* Stats row */}
+  // ---- Render phases ----
+  if (phase === "start") {
+    return (
+      <div className="page" style={{ padding: 16 }}>
+        <StartScreenCombo
+          heartRate={currentHR ?? null}
+          defaultLevel={selectedLevel}
+          defaultMinutes={10}
+          onStart={handleStart}
+          onExit={onExit}
+        />
+      </div>
+    );
+  }
+
+  if (phase === "prep") {
+    return (
+      <div className="page" style={{ padding: 16, display: "grid", gap: 16 }}>
+        {header}
+        <div
+          style={{
+            marginTop: 40,
+            fontSize: 64,
+            fontWeight: 900,
+            textAlign: "center",
+          }}
+        >
+          Get Ready… <span style={{ color: "#22d3ee" }}>{prepLeft}</span>
+        </div>
+
+        {/* Visualizer shown already so user can see pads wake up */}
+        <div
+          style={{
+            marginTop: 16,
+            padding: 16,
+            border: "1px solid #1f2937",
+            borderRadius: 16,
+            background: "#0b1020",
+          }}
+        >
+          <PadVisualizer /* if needed: lastHit={lastPad?.pad} */ />
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onExit}>Back</button>
+          <button onClick={endSession}>End Now</button>
+        </div>
+
+        <ConfirmLeave
+          open={confirmOpen}
+          onCancel={() => {
+            setConfirmOpen(false);
+            pendingLeaveAction.current = null;
+          }}
+          onConfirm={() => {
+            const act = pendingLeaveAction.current;
+            setConfirmOpen(false);
+            pendingLeaveAction.current = null;
+            act?.();
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (phase === "playing") {
+    return (
+      <div className="page" style={{ padding: 16, display: "grid", gap: 16 }}>
+        {header}
+
+        {/* 👇 Snap-in: PadVisualizer section */}
+        <div
+          style={{
+            padding: 16,
+            border: "1px solid #1f2937",
+            borderRadius: 16,
+            background: "#0b1020",
+          }}
+        >
+          <PadVisualizer /* if needed: lastHit={lastPad?.pad} */ />
+        </div>
+
+        {/* Temporary controls for testing */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setMisses((m) => m + 1)}>Simulate Miss</button>
+          <button onClick={() => onHit(Math.ceil(Math.random() * 8))}>
+            Simulate Hit
+          </button>
+          <button onClick={endSession}>End Now</button>
+          <button onClick={onExit}>Back</button>
+        </div>
+
+        <ConfirmLeave
+          open={confirmOpen}
+          onCancel={() => {
+            setConfirmOpen(false);
+            pendingLeaveAction.current = null;
+          }}
+          onConfirm={() => {
+            const act = pendingLeaveAction.current;
+            setConfirmOpen(false);
+            pendingLeaveAction.current = null;
+            act?.();
+          }}
+        />
+      </div>
+    );
+  }
+
+  // phase === "end"
+  return (
+    <div className="page" style={{ padding: 16, display: "grid", gap: 16 }}>
+      <h1 style={{ margin: 0 }}>Combo — Session Summary</h1>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: 12,
-          width: "100%",
-          maxWidth: 920,
-        }}
-      >
-        <Stat label="Score" value={score} />
-        <Stat label="Misses" value={misses} />
-        <Stat label="Combo" value={combo} />
-        <Stat label="Avg HR" value={avgHR ?? "—"} />
-        <Stat label="Max HR" value={maxHR ?? "—"} />
-      </div>
-
-      {/* Main area */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 920,
+          gap: 8,
           border: "1px solid #1f2937",
           borderRadius: 16,
-          padding: 20,
-          background:
-            "linear-gradient(180deg, rgba(17,24,39,0.8) 0%, rgba(2,6,23,0.9) 100%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 18,
+          padding: 16,
+          background: "#0b1020",
+          maxWidth: 560,
         }}
       >
-        {phase === "prep" && (
-          <StartScreen
-            heartRate={currentHR}
-            onStart={({ level, minutes }) => {
-              setSelectedLevel(level);
-              const total = minutes * 60;
-              setWorkoutTotalSec(total);
-              setWorkoutLeftSec(total);
-              setPhase("playing");
+        <div>
+          Level: <b>{selectedLevel}</b>
+        </div>
+        <div>
+          Score: <b>{score}</b>
+        </div>
+        <div>
+          Hits: <b>{hits}</b> • Misses: <b>{misses}</b>
+        </div>
+        <div>
+          Max Streak: <b>{maxStreak}</b>
+        </div>
+        {!isEndless && (
+          <div>
+            Duration: <b>{Math.round(workoutTotalSec / 60)}</b> min
+          </div>
+        )}
+        <div>
+          HR (last): <b>{currentHR ?? "—"}</b> bpm
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setPhase("start")}>Play Again</button>
+        <button onClick={onExit}>Back to Modes</button>
+      </div>
+
+      <ConfirmLeave
+        open={confirmOpen}
+        onCancel={() => {
+          setConfirmOpen(false);
+          pendingLeaveAction.current = null;
+        }}
+        onConfirm={() => {
+          const act = pendingLeaveAction.current;
+          setConfirmOpen(false);
+          pendingLeaveAction.current = null;
+          act?.();
+        }}
+      />
+    </div>
+  );
+}
+
+// ======== Minimal confirm modal (inline component) ========
+function ConfirmLeave({
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 50,
+      }}
+    >
+      <div
+        style={{
+          width: 420,
+          maxWidth: "90vw",
+          background: "#0b1020",
+          border: "1px solid #1f2937",
+          borderRadius: 16,
+          padding: 16,
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Leave session?</h3>
+        <p style={{ opacity: 0.9 }}>
+          Your current session will stop. Are you sure you want to leave?
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel}>Cancel</button>
+          <button
+            onClick={onConfirm}
+            style={{
+              fontWeight: 800,
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "2px solid #22d3ee",
+              background: "#06202a",
+              color: "white",
             }}
-            onExit={goToMenu}
-            defaultLevel={selectedLevel}
-            defaultMinutes={
-              workoutTotalSec
-                ? Math.max(1, Math.round(workoutTotalSec / 60))
-                : 10
-            }
-          />
-        )}
-
-        {phase === "rest" && (
-          <>
-            <h2 style={{ margin: 0, color: "#60a5fa" }}>Rest</h2>
-            <div style={{ fontSize: 56, fontWeight: 900 }}>{restLeft}s</div>
-            <p style={{ opacity: 0.7 }}>Next set starts automatically.</p>
-          </>
-        )}
-
-        {phase === "playing" && (
-          <>
-            {/* Simple placeholder instead of PadVisualizer */}
-            <div
-              style={{
-                width: "100%",
-                minHeight: 260,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "1px dashed #1f2937",
-                borderRadius: 12,
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 40,
-                  fontWeight: 900,
-                  letterSpacing: 0.5,
-                  opacity: missFlash ? 0.65 : 1,
-                  transition: "opacity 150ms linear",
-                }}
-              >
-                Game ongoing
-              </h2>
-            </div>
-            <p style={{ opacity: 0.7, marginTop: 6 }}>
-              Hit pads with <b>1–8</b> (number row or numpad). Menu navigation
-              is locked.
-            </p>
-          </>
-        )}
+          >
+            Yes, leave
+          </button>
+        </div>
       </div>
     </div>
   );
-};
-
-export default PlayCombo;
-
-// ------- Small UI helpers -------
-const Stat: React.FC<{ label: string; value: number | string }> = ({
-  label,
-  value,
-}) => (
-  <div
-    style={{
-      background: "#0b1220",
-      border: "1px solid #1f2937",
-      borderRadius: 12,
-      padding: 12,
-      lineHeight: 1.1,
-    }}
-  >
-    <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
-    <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
-  </div>
-);
+}

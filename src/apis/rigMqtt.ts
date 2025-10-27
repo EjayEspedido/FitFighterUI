@@ -4,18 +4,17 @@ import type { IClientOptions, MqttClient } from "mqtt";
 export type PadEvent = {
   ts: number;
   pad: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-  edge: "down";
-  seq: number;
+  edge?: "down" | "up";
+  seq?: number;
+  raw?: any; // <-- tolerate extra payload fields from Pi
 };
 
-/** Connects over WSS using creds from /api/mqtt-token. Returns a cleanup fn. */
 export async function connectRig(
   rigId: string,
   onEvent: (e: PadEvent) => void,
   onConnect?: () => void,
   onClose?: () => void
 ): Promise<() => void> {
-  // 1) Fetch creds from your backend (avoid undefined envs in browser)
   const r = await fetch(`/api/mqtt-token?rigId=${encodeURIComponent(rigId)}`, {
     credentials: "include",
   });
@@ -24,17 +23,9 @@ export async function connectRig(
     username: string;
     password: string;
   };
-  if (!username || !password)
-    throw new Error("API returned empty MQTT username/password");
 
   const url = import.meta.env.VITE_MQTT_WSS_URL as string;
   if (!url) throw new Error("VITE_MQTT_WSS_URL missing");
-
-  // Loud sanity logs (remove after it works)
-  console.log("[MQTT] url:", url);
-  console.log("[MQTT] username:", username);
-  console.log("[MQTT] pass set?:", Boolean(password));
-  console.log("[MQTT] subscribing topic:", `rig/${rigId}/events`);
 
   const opts: IClientOptions = {
     clientId: `web-${rigId}-${Math.random().toString(16).slice(2)}`,
@@ -42,34 +33,24 @@ export async function connectRig(
     password,
     keepalive: 30,
     clean: true,
-    // You can uncomment the next two if a proxy is meddling, but default is fine:
-    // protocolVersion: 4,
-    // protocolId: "MQTT",
   };
 
   const client: MqttClient = mqtt.connect(url, opts);
 
   client.on("connect", () => {
-    console.log("[MQTT] connected");
     client.subscribe(`rig/${rigId}/events`, { qos: 0 }, (err) => {
       if (err) console.error("[MQTT] subscribe error:", err);
       else onConnect?.();
     });
   });
 
-  client.on("error", (err) => {
-    console.error("[MQTT] error:", err);
-  });
-
-  client.on("close", () => {
-    console.warn("[MQTT] closed");
-    onClose?.();
-  });
+  client.on("close", () => onClose?.());
+  client.on("error", (err) => console.error("[MQTT] error:", err));
 
   client.on("message", (_topic, msg) => {
     try {
       const e = JSON.parse(msg.toString()) as PadEvent;
-      if (e?.edge === "down") onEvent(e);
+      if (e?.edge ? e.edge === "down" : true) onEvent(e);
     } catch (err) {
       console.error("[MQTT] parse error:", err);
     }
@@ -80,4 +61,18 @@ export async function connectRig(
       client.end(true);
     } catch {}
   };
+}
+
+// Optional: publish helper for rig commands
+let _clientRef: MqttClient | null = null;
+export function __setClientForPublish(c: MqttClient | null) {
+  _clientRef = c;
+}
+export async function publishRigCommand(
+  rigId: string,
+  topic: string,
+  payload: object
+) {
+  if (!_clientRef) throw new Error("MQTT client not ready");
+  _clientRef.publish(topic, JSON.stringify(payload));
 }

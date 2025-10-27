@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-type Item = { label: string; path: string; desc: string };
+type Item = { label: string; desc: string; mode: 1 | 2 | 3 };
 
 const ITEMS: Item[] = [
   {
     label: "Combo Mode",
-    path: "/play/combo",
     desc: "Memorize and execute punch strings for high scores.",
+    mode: 1,
   },
   {
     label: "Friend or Foe",
-    path: "/play/fof",
     desc: "Hit the foes, spare your friends. Precision matters.",
+    mode: 2,
   },
   {
     label: "Rhythm Game",
-    path: "/play/rhythm",
     desc: "Punch to the beat. Chain perfects for massive combos.",
+    mode: 3,
   },
 ];
 
@@ -27,7 +27,7 @@ export default function Modes() {
 
   const moveUp = () => setIdx((i) => (i - 1 + ITEMS.length) % ITEMS.length);
   const moveDown = () => setIdx((i) => (i + 1) % ITEMS.length);
-  const confirm = () => navigate(ITEMS[idx].path);
+  const confirm = () => navigate(`/start?mode=${ITEMS[idx].mode}`);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

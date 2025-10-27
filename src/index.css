@@ -474,3 +474,23 @@ li {
   -webkit-appearance: none;
   margin: 0;
 }
+
+.logout-btn {
+  background: transparent;
+  border: 2px solid var(--neon);
+  color: var(--neon);
+  font: 700 16px "Orbitron", sans-serif;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+  margin: 10px auto;
+  display: block;
+}
+
+.logout-btn:hover {
+  background: var(--neon);
+  color: #000;
+  box-shadow: 0 0 16px var(--neon);
+}

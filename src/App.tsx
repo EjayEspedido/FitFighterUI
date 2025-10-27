@@ -22,6 +22,7 @@ import DebugMQTT from "./pages/DebugMQTT";
 import TopBarHR from "./components/TopBarHR";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import StartRouter from "./components/StartRouter";
 
 const PAGES = ["/", "/leaderboards", "/settings", "/DebugMQTT"];
 
@@ -120,6 +121,7 @@ function MainApp() {
         <Route path="/play/fof" element={<PlayFoF />} />
         <Route path="/play/rhythm" element={<PlayRhythm />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/start" element={<StartRouter />} />
       </Routes>
     </div>
   );

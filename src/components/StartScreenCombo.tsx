@@ -1,183 +1,237 @@
-import React, { useMemo, useState } from "react";
+// src/components/StartScreenCombo.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { usePadInput } from "../apis/RigInputProvider";
+import "./StartScreenCombo.css";
 
 export type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
-
-interface StartScreenProps {
-  duration?: number; // (kept for backward compat but unused now)
-  heartRate?: number | null | undefined;
-  // New API: tell parent the chosen level & minutes
-  onStart: (opts: { level: Level; minutes: number }) => void;
-  onExit: () => void;
-  // Optional defaults
-  defaultLevel?: Level;
-  defaultMinutes?: number; // total workout minutes
-}
-
 const LEVELS: Level[] = ["Beginner", "Intermediate", "Advanced", "Expert"];
 
-const StartScreen: React.FC<StartScreenProps> = ({
-  heartRate,
+export type StartComboParams = {
+  level: Level;
+  minutes: number;
+  isEndless: boolean;
+};
+
+type Props = {
+  defaultLevel?: Level; // pass user's level here
+  defaultMinutes?: number; // snapped to 5
+  onStart: (params: StartComboParams) => void;
+  onExit: () => void;
+  heartRate?: number | null;
+};
+
+export default function StartScreenCombo({
+  defaultLevel = "Beginner",
+  defaultMinutes = 10,
+  heartRate = null,
   onStart,
   onExit,
-  defaultLevel = "Intermediate",
-  defaultMinutes = 10,
-}) => {
-  const [level, setLevel] = useState<Level>(defaultLevel);
-  const [minutes, setMinutes] = useState<number>(defaultMinutes);
+}: Props) {
+  const snap5 = (m: number) => Math.max(5, Math.round((m || 5) / 5) * 5);
 
-  const canStart = useMemo(() => minutes >= 1 && minutes <= 90, [minutes]);
+  const [levelIdx, setLevelIdx] = useState(
+    Math.max(0, LEVELS.indexOf(defaultLevel))
+  );
+  const [minutes, setMinutes] = useState(snap5(defaultMinutes));
+  const [isEndless, setIsEndless] = useState(false);
+
+  const level = useMemo(() => LEVELS[levelIdx], [levelIdx]);
+
+  // actions
+  const prevLevel = () =>
+    setLevelIdx((i) => (i - 1 + LEVELS.length) % LEVELS.length);
+  const nextLevel = () => setLevelIdx((i) => (i + 1) % LEVELS.length);
+  const decMinutes5 = () => setMinutes((m) => snap5(m - 5));
+  const incMinutes5 = () => setMinutes((m) => snap5(m + 5));
+  const toggleEndless = () => setIsEndless((v) => !v);
+  const confirm = () => onStart({ level, minutes: snap5(minutes), isEndless });
+
+  // keyboard
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      switch (e.key) {
+        case "1":
+          prevLevel();
+          break;
+        case "3":
+          nextLevel();
+          break;
+        case "4":
+          decMinutes5();
+          break;
+        case "6":
+          incMinutes5();
+          break;
+        case "7":
+        case "8":
+          toggleEndless();
+          break;
+        case "2":
+        case "Enter":
+        case " ":
+          confirm();
+          break;
+        case "5":
+          onExit();
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [level, minutes, isEndless, onExit]);
+
+  // pads
+  const { last } = usePadInput();
+  const lastSeenTs = useRef<number>(0);
+  useEffect(() => {
+    if (!last || last.ts === lastSeenTs.current) return;
+    lastSeenTs.current = last.ts;
+    if (last.edge && last.edge !== "down") return;
+    switch (last.pad) {
+      case 1:
+        prevLevel();
+        break;
+      case 3:
+        nextLevel();
+        break;
+      case 4:
+        decMinutes5();
+        break;
+      case 6:
+        incMinutes5();
+        break;
+      case 7:
+      case 8:
+        toggleEndless();
+        break;
+      case 2:
+        confirm();
+        break;
+      case 5:
+        onExit();
+        break;
+    }
+  }, [last]);
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 720,
-        display: "grid",
-        gap: 16,
-        textAlign: "center",
-      }}
-    >
-      <h2 style={{ margin: 0, fontWeight: 900 }}>Get Ready</h2>
+    <div className="page start-page">
+      <h1 className="title">Combo Mode — Start</h1>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-        }}
-      >
-        {/* Level picker */}
-        <div
-          style={{
-            border: "1px solid #1f2937",
-            borderRadius: 12,
-            padding: 16,
-            background: "#0b1220",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-            Select Level
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 8,
-            }}
-          >
-            {LEVELS.map((lv) => (
-              <button
-                key={lv}
-                onClick={() => setLevel(lv)}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border:
-                    level === lv ? "2px solid #60a5fa" : "1px solid #1f2937",
-                  background: level === lv ? "#111827" : "#0b1220",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                {lv}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="start-card">
+        {/* Level with directional controls */}
+        <section className="section">
+          <label className="section__label">Level</label>
+          <div className="row-with-arrows">
+            <button type="button" className="btn arrow-btn" onClick={prevLevel}>
+              ◀ <span className="pad-hint">1</span>
+            </button>
 
-        {/* Time picker */}
-        <div
-          style={{
-            border: "1px solid #1f2937",
-            borderRadius: 12,
-            padding: 16,
-            background: "#0b1220",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-            Workout Duration (minutes)
-          </div>
-
-          <div style={{ display: "grid", gap: 10 }}>
-            <input
-              type="range"
-              min={1}
-              max={90}
-              value={minutes}
-              onChange={(e) => setMinutes(parseInt(e.target.value, 10))}
-            />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="number"
-                min={1}
-                max={90}
-                value={minutes}
-                onChange={(e) =>
-                  setMinutes(
-                    Math.max(
-                      1,
-                      Math.min(90, parseInt(e.target.value || "1", 10))
-                    )
-                  )
-                }
-                style={{
-                  width: 90,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #1f2937",
-                  background: "#030712",
-                  color: "#e5e7eb",
-                }}
-              />
-              <span style={{ opacity: 0.7 }}>min</span>
+            <div className="button-grid button-grid--4">
+              {LEVELS.map((L, i) => (
+                <button
+                  key={L}
+                  type="button"
+                  onClick={() => setLevelIdx(i)}
+                  className={`btn ${i === levelIdx ? "btn--active" : ""}`}
+                >
+                  {L}
+                </button>
+              ))}
             </div>
+
+            <button type="button" className="btn arrow-btn" onClick={nextLevel}>
+              <span className="pad-hint">3</span> ▶
+            </button>
           </div>
-        </div>
+
+          <div className="keyguide">
+            Adjust: <b>1</b>/<b>3</b>
+          </div>
+        </section>
+
+        {/* Time with directional controls (no -5 / +5 text) */}
+        <section className="section">
+          <label className="section__label">Workout Time (minutes)</label>
+          <div className="row-with-arrows">
+            <button
+              type="button"
+              className="btn arrow-btn"
+              onClick={decMinutes5}
+            >
+              ◀ <span className="pad-hint">4</span>
+            </button>
+
+            <div className="time-row">
+              <div className="time-display btn">{minutes} min</div>
+            </div>
+
+            <button
+              type="button"
+              className="btn arrow-btn"
+              onClick={incMinutes5}
+            >
+              <span className="pad-hint">6</span> ▶
+            </button>
+          </div>
+
+          <div className="keyguide">
+            Adjust: <b>4</b>/<b>6</b>
+          </div>
+        </section>
+
+        {/* Endless with directional toggles (smaller pad numbers) */}
+        <section className="section">
+          <div className="row-with-arrows">
+            <button
+              type="button"
+              className="btn arrow-btn"
+              onClick={toggleEndless}
+            >
+              ◀ <span className="pad-hint">7</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleEndless}
+              className={`btn ${isEndless ? "btn--active" : ""}`}
+            >
+              Endless Mode: <b>{isEndless ? "ON" : "OFF"}</b>
+            </button>
+
+            <button
+              type="button"
+              className="btn arrow-btn"
+              onClick={toggleEndless}
+            >
+              <span className="pad-hint">8</span> ▶
+            </button>
+          </div>
+
+          <div className="keyguide">
+            Toggle: <b>7</b>/<b>8</b>
+          </div>
+        </section>
       </div>
 
-      {/* HR row */}
-      <div style={{ opacity: 0.85 }}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Current Heart Rate</div>
-        <div style={{ fontWeight: 800, fontSize: 18 }}>
-          {heartRate ?? "—"} bpm
-        </div>
+      {/* Actions */}
+      <div className="actions-row">
+        <button type="button" onClick={onExit} className="btn">
+          Back (5)
+        </button>
+        <button type="button" onClick={confirm} className="btn btn--primary">
+          Start (2)
+        </button>
       </div>
 
-      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-        <button
-          onClick={() => onStart({ level, minutes })}
-          disabled={!canStart}
-          style={{
-            padding: "12px 18px",
-            borderRadius: 10,
-            border: "1px solid #1f2937",
-            background: canStart ? "#111827" : "#0f172a",
-            color: canStart ? "#e5e7eb" : "#64748b",
-            fontWeight: 800,
-            cursor: canStart ? "pointer" : "not-allowed",
-          }}
-        >
-          Start Workout
-        </button>
-        <button
-          onClick={onExit}
-          style={{
-            padding: "12px 18px",
-            borderRadius: 10,
-            border: "1px solid #1f2937",
-            background: "#0b1220",
-            color: "#e5e7eb",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Exit
-        </button>
+      <div className="keyguide mt-2">
+        Pads/Keys — Level: <b>1</b>/<b>3</b> • Time: <b>4</b>/<b>6</b> •
+        Endless: <b>7</b>/<b>8</b> • Start: <b>2</b> • Back: <b>5</b>
+      </div>
+
+      <div className="keyguide mt-1">
+        HR: <b>{heartRate ?? "—"}</b> bpm
       </div>
     </div>
   );
-};
-
-export default StartScreen;
+}

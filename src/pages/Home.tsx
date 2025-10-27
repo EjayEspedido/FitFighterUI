@@ -53,7 +53,6 @@ export default function Home() {
           Where we fight laziness and put the fun in fitness.
         </p>
       </div>
-
       {/* Menu */}
       <div className="menu">
         {ITEMS.map((item, i) => {
@@ -74,12 +73,13 @@ export default function Home() {
           );
         })}
       </div>
-
       <div className="keyguide">
         Press <b>4</b>/<b>6</b> = Up • <b>7</b>/<b>8</b> = Down • <b>2</b> =
         Confirm
       </div>
-      <button onClick={() => signOut(auth)}>Logout</button>
+      <button className="logout-btn" onClick={() => signOut(auth)}>
+        Logout
+      </button>{" "}
     </div>
   );
 }

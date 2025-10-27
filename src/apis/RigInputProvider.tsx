@@ -6,8 +6,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { connectRig } from "../apis/rigMqtt";
-import type { PadEvent } from "../apis/rigMqtt";
+import { connectRig } from "./rigMqtt";
+import type { PadEvent } from "./rigMqtt";
 
 type Listener = (e: PadEvent) => void;
 type RigInputCtx = {

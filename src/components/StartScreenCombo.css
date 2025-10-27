@@ -1,0 +1,142 @@
+.start-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-primary, #b9ffd8);
+}
+
+.start-card {
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(24, 255, 109, 0.3);
+  border-radius: 16px;
+  padding: 30px 40px;
+  width: 100%;
+  max-width: 600px;
+  margin: 20px auto;
+  box-shadow: 0 0 25px rgba(24, 255, 109, 0.1);
+}
+
+.section {
+  margin-bottom: 28px;
+}
+
+.section__label {
+  display: block;
+  font-family: "Orbitron", sans-serif;
+  font-size: 1rem;
+  letter-spacing: 1px;
+  color: var(--neon, #18ff6d);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.button-grid {
+  display: grid;
+  gap: 10px;
+  justify-content: center;
+}
+
+.button-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.button-grid--5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.btn {
+  font-family: "Orbitron", sans-serif;
+  padding: 10px 16px;
+  background: rgba(24, 255, 109, 0.05);
+  border: 1px solid rgba(24, 255, 109, 0.25);
+  color: #b9ffd8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  border-color: var(--neon, #18ff6d);
+  background: rgba(24, 255, 109, 0.1);
+  box-shadow: 0 0 8px rgba(24, 255, 109, 0.3);
+}
+
+.btn--active,
+.btn--primary {
+  border-color: var(--neon, #18ff6d);
+  background: rgba(24, 255, 109, 0.2);
+  box-shadow: 0 0 10px rgba(24, 255, 109, 0.4);
+  color: #fff;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.time-display {
+  min-width: 80px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.keyguide {
+  font-size: 0.85rem;
+  color: rgba(185, 255, 216, 0.7);
+  margin-top: 8px;
+}
+
+.mt-1 {
+  margin-top: 10px;
+}
+
+.mt-2 {
+  margin-top: 20px;
+}
+
+/* Thinner, subtler directional buttons */
+.arrow-btn {
+  min-width: 70px; /* narrower */
+  padding: 6px 8px; /* smaller padding */
+  font-size: 0.9rem; /* slightly smaller font */
+  font-weight: 600;
+  opacity: 0.85;
+  background: transparent; /* blends with background */
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  transition: all 0.15s ease-in-out;
+}
+
+.arrow-btn:hover {
+  opacity: 1;
+  border-color: rgba(34, 211, 238, 0.6);
+  transform: scale(1.03);
+}
+
+/* Smaller pad number hint */
+.pad-hint {
+  font-size: 0.7em;
+  opacity: 0.75;
+  margin: 0 2px;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+/* Keep the row layout tight and aligned */
+.row-with-arrows {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
