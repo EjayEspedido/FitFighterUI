@@ -1,38 +1,19 @@
-// src/apis/gameControl.tsx
 export type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 
 export async function sendStartParams(
   rigId: string,
   payload: {
     userLevel: Level;
-    gameMode: 1 | 2;
-    total_time: number;
+    gameMode: 1 | 2; // 1=Combo, 2=FoF
+    total_time: number; // seconds
     isEndless: boolean;
   }
-): Promise<{
-  ok: boolean;
-  status?: number;
-  error?: string;
-  forwarded?: boolean;
-}> {
-  try {
-    const res = await fetch("http://localhost:6969/api/rig-command", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ rigId, cmd: "start", payload }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn("[sendStartParams] non-OK response", res.status, text);
-      return { ok: false, status: res.status, error: text };
-    }
-
-    const body = await res.json().catch(() => null);
-    // server responds with { ok: true, forwarded: true } when forwarded
-    return { ok: true, forwarded: body?.forwarded ?? false };
-  } catch (err: any) {
-    console.warn("[sendStartParams] failed to fetch", err);
-    return { ok: false, error: err?.message ?? String(err) };
-  }
+) {
+  // HTTP bridge to your backend (adjust path if needed)
+  const r = await fetch("/api/rig-command", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rigId, cmd: "start", payload }),
+  });
+  if (!r.ok) throw new Error(`/api/rig-command failed: ${r.status}`);
 }

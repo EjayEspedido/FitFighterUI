@@ -1,7 +1,7 @@
 import React from "react";
 import { useHeartRate } from "../apis/HeartRateProvider";
 
-export default function TopBarHR({ displayName }: { displayName?: string }) {
+export default function TopBarHR() {
   const { bpm, deviceName, connected, connecting, error, connect, disconnect } =
     useHeartRate();
 
@@ -17,21 +17,6 @@ export default function TopBarHR({ displayName }: { displayName?: string }) {
         borderBottom: "1px solid #1f2937",
       }}
     >
-      {/* Username on the far left */}
-      {displayName && (
-        <span
-          style={{
-            fontWeight: 600,
-            fontSize: 14,
-            color: "#f3f4f6",
-            marginRight: 16,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {displayName}
-        </span>
-      )}
-
       <span style={{ opacity: 0.7, fontSize: 12 }}>HRM</span>
       <strong style={{ fontVariantNumeric: "tabular-nums" }}>
         {bpm ?? "—"} bpm
@@ -39,13 +24,11 @@ export default function TopBarHR({ displayName }: { displayName?: string }) {
       <span style={{ opacity: 0.7, fontSize: 12 }}>
         {connected ? deviceName ?? "Connected" : "Disconnected"}
       </span>
-
       {error && (
         <span style={{ color: "rgb(248,113,113)", fontSize: 12 }}>
           • {error}
         </span>
       )}
-
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button
           onClick={connect}
@@ -71,7 +54,6 @@ const btn: React.CSSProperties = {
   fontWeight: 800,
   cursor: "pointer",
 };
-
 const btnOutline: React.CSSProperties = {
   padding: "6px 10px",
   background: "transparent",
