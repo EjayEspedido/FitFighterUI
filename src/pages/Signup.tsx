@@ -7,7 +7,7 @@ import { auth, db } from "../firebase";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
+  const [displayName, setUsername] = useState("");
   const [level, setLevel] = useState("Beginner");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
@@ -27,7 +27,7 @@ export default function Signup() {
       console.log("Auth success:", userCredential.user.uid);
 
       await setDoc(doc(db, "users", userCredential.user.uid), {
-        username,
+        displayName,
         email,
         level,
         weight: Number(weight),
@@ -52,7 +52,7 @@ export default function Signup() {
         <input
           type="text"
           placeholder="Username"
-          value={username}
+          value={displayName}
           onChange={(e) => setUsername(e.target.value)}
           required
         />
