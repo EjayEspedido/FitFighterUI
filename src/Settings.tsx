@@ -1,6 +1,6 @@
 // pages/Settings.tsx (example)
-import HRMPanel from "../components/HRMPanel.tsx";
-import PadVisualizer from "../components/PadVisualizer.tsx";
+import HRMPanel from "./components/HRMPanel.tsx";
+import PadVisualizer from "./components/PadVisualizer.tsx";
 
 export default function Settings() {
   return (

@@ -1,7 +1,9 @@
 // src/components/StartScreenCombo.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePadInput } from "../apis/RigInputProvider";
-import "./StartScreenCombo.css";
+import "./StartScreen.css";
+import { useHeartRate } from "../apis/HeartRateProvider";
 
 export type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 const LEVELS: Level[] = ["Beginner", "Intermediate", "Advanced", "Expert"];
@@ -10,29 +12,18 @@ export type StartComboParams = {
   level: Level;
   minutes: number;
   isEndless: boolean;
+  startBpm?: number | null;
+  startedAt?: number;
 };
 
-type Props = {
-  defaultLevel?: Level; // pass user's level here
-  defaultMinutes?: number; // snapped to 5
-  onStart: (params: StartComboParams) => void;
-  onExit: () => void;
-  heartRate?: number | null;
-};
+export default function StartScreenCombo() {
+  const navigate = useNavigate();
+  const { bpm } = useHeartRate(); // <-- hook inside component
 
-export default function StartScreenCombo({
-  defaultLevel = "Beginner",
-  defaultMinutes = 10,
-  heartRate = null,
-  onStart,
-  onExit,
-}: Props) {
   const snap5 = (m: number) => Math.max(5, Math.round((m || 5) / 5) * 5);
 
-  const [levelIdx, setLevelIdx] = useState(
-    Math.max(0, LEVELS.indexOf(defaultLevel))
-  );
-  const [minutes, setMinutes] = useState(snap5(defaultMinutes));
+  const [levelIdx, setLevelIdx] = useState(0);
+  const [minutes, setMinutes] = useState(snap5(10));
   const [isEndless, setIsEndless] = useState(false);
 
   const level = useMemo(() => LEVELS[levelIdx], [levelIdx]);
@@ -44,7 +35,19 @@ export default function StartScreenCombo({
   const decMinutes5 = () => setMinutes((m) => snap5(m - 5));
   const incMinutes5 = () => setMinutes((m) => snap5(m + 5));
   const toggleEndless = () => setIsEndless((v) => !v);
-  const confirm = () => onStart({ level, minutes: snap5(minutes), isEndless });
+
+  const confirm = () => {
+    const session: StartComboParams = {
+      level,
+      minutes: snap5(minutes),
+      isEndless,
+      startBpm: bpm ?? null, // snapshot at start
+      startedAt: Date.now(),
+    };
+    navigate("/play/combo", { state: { session } });
+  };
+
+  const exit = () => navigate("/Modes");
 
   // keyboard
   useEffect(() => {
@@ -73,20 +76,20 @@ export default function StartScreenCombo({
           confirm();
           break;
         case "5":
-          onExit();
+          exit();
           break;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [level, minutes, isEndless, onExit]);
+  }, [levelIdx, minutes, isEndless, bpm]); // bpm doesn't change handlers, but fine to include
 
   // pads
   const { last } = usePadInput();
   const lastSeenTs = useRef<number>(0);
   useEffect(() => {
     if (!last || last.ts === lastSeenTs.current) return;
-    lastSeenTs.current = last.ts;
+    lastSeenTs.current = last.ts ?? 0;
     if (last.edge && last.edge !== "down") return;
     switch (last.pad) {
       case 1:
@@ -109,10 +112,10 @@ export default function StartScreenCombo({
         confirm();
         break;
       case 5:
-        onExit();
+        exit();
         break;
     }
-  }, [last]);
+  }, [last, bpm]);
 
   return (
     <div className="page start-page">
@@ -150,7 +153,7 @@ export default function StartScreenCombo({
           </div>
         </section>
 
-        {/* Time with directional controls (no -5 / +5 text) */}
+        {/* Time with directional controls */}
         <section className="section">
           <label className="section__label">Workout Time (minutes)</label>
           <div className="row-with-arrows">
@@ -180,7 +183,7 @@ export default function StartScreenCombo({
           </div>
         </section>
 
-        {/* Endless with directional toggles (smaller pad numbers) */}
+        {/* Endless toggle */}
         <section className="section">
           <div className="row-with-arrows">
             <button
@@ -216,7 +219,7 @@ export default function StartScreenCombo({
 
       {/* Actions */}
       <div className="actions-row">
-        <button type="button" onClick={onExit} className="btn">
+        <button type="button" onClick={exit} className="btn">
           Back (5)
         </button>
         <button type="button" onClick={confirm} className="btn btn--primary">
@@ -230,7 +233,7 @@ export default function StartScreenCombo({
       </div>
 
       <div className="keyguide mt-1">
-        HR: <b>{heartRate ?? "—"}</b> bpm
+        HR: <b>{bpm ?? "—"}</b> bpm
       </div>
     </div>
   );

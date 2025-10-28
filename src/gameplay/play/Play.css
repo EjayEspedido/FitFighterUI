@@ -1,0 +1,113 @@
+/* src/gameplay/play/PlayCombo.css */
+/* Compact, tightened layout for PlayCombo / EndScreenCombo */
+.playcombo-page .title.compact {
+  margin: 6px 0 10px 0;
+  font-size: 18px;
+  letter-spacing: 0.6px;
+}
+
+.start-card.compact {
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* status row */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+.status-on {
+  background: var(--neon, #18ff6d);
+  box-shadow: 0 0 8px rgba(24, 255, 109, 0.55);
+}
+.status-off {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* compact grid helpers */
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.compact .btn.small {
+  padding: 8px 8px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+.muted.small {
+  font-size: 11px;
+  opacity: 0.78;
+}
+.stat {
+  font-weight: 800;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+/* controls */
+.controls-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+.btn.test {
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+  min-width: 92px;
+}
+.btn.test.danger {
+  background: rgba(255, 60, 60, 0.08);
+  border: 1px solid rgba(255, 60, 60, 0.12);
+}
+
+/* shared smaller helpers */
+.keyguide.small {
+  font-size: 12px;
+  opacity: 0.86;
+  text-align: center;
+}
+
+/* footer / action row */
+.footer-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.btn.primary,
+.btn.primary:hover {
+  background: var(--neon, #18ff6d);
+  color: #000;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--neon, #aaffaa);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn:hover {
+  filter: brightness(1.05);
+}

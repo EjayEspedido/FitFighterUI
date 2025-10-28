@@ -1,59 +1,55 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { connectRig } from "./rigMqtt";
-import type { PadEvent } from "./rigMqtt";
+// src/apis/RigInputProvider.tsx
+import React, { useEffect, useRef, useState } from "react";
+import { connectRig, type PadEvent } from "./rigMqtt"; // adjust path if necessary
 
 type Listener = (e: PadEvent) => void;
-type RigInputCtx = {
-  connected: boolean;
-  rigId: string | null;
-  setRigId: (id: string) => void;
-  addListener: (fn: Listener) => () => void;
-  last: PadEvent | null;
-};
-const Ctx = createContext<RigInputCtx>(null as unknown as RigInputCtx);
 
-export function RigInputProvider({ children }: { children: React.ReactNode }) {
+/**d
+ * useRigInput(rigId?: string | null)
+ * - rigId is optional; if omitted or null, the hook will be disconnected/idle.
+ */
+export function useRigInput(rigId?: string | null) {
+  const listenersRef = useRef<Listener[]>([]);
   const [connected, setConnected] = useState(false);
-  const [rigId, setRigIdState] = useState<string | null>(
-    () => localStorage.getItem("rigId") || "rig-ff-001"
-  );
-  const setRigId = (id: string) => {
-    setRigIdState(id);
-    localStorage.setItem("rigId", id);
-  };
   const [last, setLast] = useState<PadEvent | null>(null);
-  const listenersRef = useRef<Set<Listener>>(new Set());
-
-  const addListener = (fn: Listener) => {
-    listenersRef.current.add(fn);
-    return () => listenersRef.current.delete(fn);
-  };
 
   useEffect(() => {
-    if (!rigId) return;
     let disposed = false;
-    let cleanup: (() => void) | undefined;
+    let cleanup: (() => void) | undefined = undefined;
+    const effectiveRigId = rigId ?? null;
+
+    if (!effectiveRigId) {
+      setConnected(false);
+      return;
+    }
 
     (async () => {
       try {
+        console.debug(
+          "[RigInputProvider] calling connectRig for",
+          effectiveRigId
+        );
         const c = await connectRig(
-          rigId,
-          (e) => {
+          effectiveRigId,
+          (e: PadEvent) => {
             if (!disposed) {
               console.log("[PAD]", e.pad, e);
               setLast(e);
               for (const fn of listenersRef.current) fn(e);
             }
           },
-          () => !disposed && setConnected(true),
-          () => !disposed && setConnected(false)
+          () => {
+            if (!disposed) {
+              console.debug("[RigInputProvider] onConnect");
+              setConnected(true);
+            }
+          },
+          () => {
+            if (!disposed) {
+              console.debug("[RigInputProvider] onClose");
+              setConnected(false);
+            }
+          }
         );
         if (!disposed) cleanup = c;
       } catch (err) {
@@ -64,18 +60,39 @@ export function RigInputProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       disposed = true;
-      try {
-        cleanup?.();
-      } catch {}
+      if (cleanup) cleanup();
     };
   }, [rigId]);
 
-  const value = useMemo(
-    () => ({ connected, rigId, setRigId, addListener, last }),
-    [connected, rigId, last]
-  );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  const addListener = (fn: Listener) => {
+    listenersRef.current.push(fn);
+    return () => {
+      listenersRef.current = listenersRef.current.filter((f) => f !== fn);
+    };
+  };
+
+  return {
+    connected,
+    last,
+    addListener,
+  };
 }
-export function usePadInput(): RigInputCtx {
-  return useContext(Ctx);
-}
+
+/**
+ * RigInputProvider component
+ * - rigId prop is optional; default is null.
+ * - keeps rendering children; it only manages the connection lifecycle.
+ */
+export const RigInputProvider: React.FC<{
+  rigId?: string | null;
+  children?: React.ReactNode;
+}> = ({ rigId = null, children }) => {
+  const { connected } = useRigInput(rigId);
+
+  return <div data-rig-connected={connected}>{children}</div>;
+};
+
+export default RigInputProvider;
+
+// Backwards-compat: alias the old hook name so existing imports work
+export { useRigInput as usePadInput };

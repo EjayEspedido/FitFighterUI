@@ -140,3 +140,130 @@
   align-items: center;
   gap: 6px;
 }
+
+/* compact card adjustments */
+.compact-card {
+  padding: 12px;
+  gap: 8px;
+  max-width: 920px;
+  margin: 12px auto;
+}
+
+/* tighter sections */
+.section.tight {
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* grid helpers */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tight-grid {
+  gap: 8px;
+}
+
+/* small stat blocks */
+.stat {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.stat__label {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.stat__value {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* compact utilities */
+.row {
+  display: flex;
+  align-items: center;
+}
+.center {
+  align-items: center;
+}
+.compact-center {
+  display: flex;
+  justify-content: center;
+}
+.mt-05 {
+  margin-top: 6px;
+}
+.mt-1 {
+  margin-top: 10px;
+}
+
+/* small buttons for test */
+.btn.small {
+  padding: 6px 8px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+/* status dot */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+.status-dot--on {
+  background: var(--neon, #18ff6d);
+  box-shadow: 0 0 8px rgba(24, 255, 109, 0.45);
+}
+
+/* reduce spacing for keyguide and tiny */
+.tiny {
+  font-size: 11px;
+}
+.muted {
+  color: rgba(255, 255, 255, 0.6);
+}
+.strong {
+  font-weight: 700;
+}
+
+.play-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+  padding: 20px 0;
+  text-align: center;
+}
+
+.play-status__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
+}
+
+.play-status__dot.on {
+  background: var(--neon, #18ff6d);
+  box-shadow: 0 0 14px rgba(24, 255, 109, 0.6);
+}
+
+.play-status__text {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
