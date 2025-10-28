@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useEffect, useState } from "react";
 import {
   Routes,
@@ -8,9 +9,12 @@ import {
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
+
 import { HeartRateProvider } from "./apis/HeartRateProvider";
 import { RigInputProvider, usePadInput } from "./apis/RigInputProvider";
+
 import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
@@ -18,27 +22,85 @@ import Modes from "./pages/Modes";
 import PlayCombo from "./pages/play/PlayCombo";
 import PlayFoF from "./pages/play/PlayFoF";
 import PlayRhythm from "./pages/play/PlayRhythm";
+
 import DebugMQTT from "./pages/DebugMQTT";
 import TopBarHR from "./components/TopBarHR";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import StartRouter from "./components/StartRouter";
 
+import Profile from "./pages/Profile";
+
 const PAGES = ["/", "/leaderboards", "/settings", "/DebugMQTT"];
+
+export type AppUserDoc = {
+  displayName?: string;
+  email?: string;
+  photoURL?: string;
+  age?: number;
+  height?: number;
+  weight?: number;
+  level?: string;
+  createdAt?: any;
+  [key: string]: any;
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [userDoc, setUserDoc] = useState<AppUserDoc | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    let unsubDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
+      setLoading(true);
+
+      if (currentUser) {
+        const userRef = doc(db, "users", currentUser.uid);
+
+        // one-time fetch (optional, but helpful)
+        try {
+          const snap = await getDoc(userRef);
+          setUserDoc(snap.exists() ? (snap.data() as AppUserDoc) : null);
+        } catch (err) {
+          console.error("getDoc error:", err);
+          setUserDoc(null);
+        }
+
+        // subscribe for realtime updates
+        unsubDoc = onSnapshot(
+          userRef,
+          (snap) => {
+            setUserDoc(snap.exists() ? (snap.data() as AppUserDoc) : null);
+            setLoading(false);
+          },
+          (err) => {
+            console.error("user doc onSnapshot error:", err);
+            setLoading(false);
+          }
+        );
+      } else {
+        // signed out
+        setUserDoc(null);
+        setLoading(false);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  // debug logs to confirm values — remove if noisy
+  useEffect(() => {
+    console.log("Auth user:", user);
+    console.log("Firestore userDoc:", userDoc);
+  }, [user, userDoc]);
+
+  if (loading) return <div>Loading.</div>;
 
   const location = useLocation();
 
@@ -50,13 +112,13 @@ export default function App() {
   return (
     <RigInputProvider>
       <HeartRateProvider>
-        <MainApp />
+        <MainApp userDoc={userDoc} />
       </HeartRateProvider>
     </RigInputProvider>
   );
 }
 
-function MainApp() {
+function MainApp({ userDoc }: { userDoc: AppUserDoc | null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { addListener } = usePadInput();
@@ -81,7 +143,8 @@ function MainApp() {
 
   return (
     <div>
-      <TopBarHR />
+      <TopBarHR displayName={userDoc?.displayName} />
+
       {!inGameplay && (
         <>
           <nav>
@@ -104,6 +167,12 @@ function MainApp() {
             >
               Settings
             </NavLink>
+            <NavLink
+              to="/profile"
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Profile
+            </NavLink>
           </nav>
           <div className="keyguide">
             Press <b>1</b> ◀︎ / ▶︎ <b>3</b> to switch pages
@@ -117,11 +186,15 @@ function MainApp() {
         <Route path="/modes" element={<Modes />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/DebugMQTT" element={<DebugMQTT />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/start" element={<StartRouter />} />
+
+        <Route path="/profile" element={<Profile user={userDoc} />} />
+
+        {/* Play routes */}
         <Route path="/play/combo" element={<PlayCombo />} />
         <Route path="/play/fof" element={<PlayFoF />} />
         <Route path="/play/rhythm" element={<PlayRhythm />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/start" element={<StartRouter />} />
       </Routes>
     </div>
   );
