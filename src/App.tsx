@@ -10,7 +10,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { auth } from "./firebase";
 import { HeartRateProvider } from "./apis/HeartRateProvider";
-import { RigInputProvider, usePadInput } from "./apis/RigInputProvider";
 import Home from "./pages/Home";
 import Leaderboards from "./pages/Leaderboards";
 import Settings from "./pages/Settings";
@@ -18,7 +17,6 @@ import Modes from "./pages/Modes";
 import PlayCombo from "./pages/play/PlayCombo";
 import PlayFoF from "./pages/play/PlayFoF";
 import PlayRhythm from "./pages/play/PlayRhythm";
-import DebugMQTT from "./pages/DebugMQTT";
 import TopBarHR from "./components/TopBarHR";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -48,36 +46,18 @@ export default function App() {
   }
 
   return (
-    <RigInputProvider>
-      <HeartRateProvider>
-        <MainApp />
-      </HeartRateProvider>
-    </RigInputProvider>
+    <HeartRateProvider>
+      <MainApp />
+    </HeartRateProvider>
   );
 }
 
 function MainApp() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addListener } = usePadInput();
 
   const normalizedPath = location.pathname.replace("/fit-fighter-ui", "");
   const inGameplay = normalizedPath.startsWith("/play");
-
-  useEffect(() => {
-    const off = addListener((e) => {
-      if (inGameplay) return;
-      const idx = Math.max(0, PAGES.indexOf(normalizedPath));
-      if (e.pad === 1) {
-        const prev = (idx - 1 + PAGES.length) % PAGES.length;
-        navigate(PAGES[prev]);
-      } else if (e.pad === 3) {
-        const next = (idx + 1) % PAGES.length;
-        navigate(PAGES[next]);
-      }
-    });
-    return off;
-  }, [addListener, inGameplay, normalizedPath, navigate]);
 
   return (
     <div>
@@ -116,7 +96,6 @@ function MainApp() {
         <Route path="/leaderboards" element={<Leaderboards />} />
         <Route path="/modes" element={<Modes />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/DebugMQTT" element={<DebugMQTT />} />
         <Route path="/play/combo" element={<PlayCombo />} />
         <Route path="/play/fof" element={<PlayFoF />} />
         <Route path="/play/rhythm" element={<PlayRhythm />} />
