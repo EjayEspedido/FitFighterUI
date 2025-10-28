@@ -12,9 +12,11 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "postbuild": "cp dist/index.html dist/404.html",
-    "devMQTT": "concurrently -k -n UI,API -c blue,magenta \"vite\" \"node index.js\""
+    "devMQTT": "concurrently -k -n UI,API -c blue,magenta \"vite\" \"node index.js\"",
+    "start": "node server.mjs"
   },
   "dependencies": {
+    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
@@ -40,5 +42,17 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.44.0",
     "vite": "^7.1.7"
+  },
+  "description": "",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EjayEspedido/fit-fighter-ui.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/EjayEspedido/fit-fighter-ui/issues"
   }
 }
