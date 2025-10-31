@@ -22,7 +22,6 @@ import Home from "./Home";
 import Leaderboards from "./Leaderboards";
 import Settings from "./Settings";
 import Modes from "./Modes";
-import DebugMQTT from "./DebugMQTT";
 import Profile from "./Profile";
 
 import PlayStart from "./gameplay/PlayStart";
@@ -194,7 +193,6 @@ function MainApp({ userDoc }: { userDoc: AppUserDoc | null }) {
         <Route path="/leaderboards" element={<Leaderboards />} />
         <Route path="/modes" element={<Modes />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/DebugMQTT" element={<DebugMQTT />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/profile" element={<Profile user={userDoc} />} />
 
