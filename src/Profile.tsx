@@ -1,5 +1,4 @@
 // src/pages/Profile.tsx  (small changes from your existing file)
-import React from "react";
 import type { AppUserDoc } from "./App";
 
 type ProfileProps = { user: AppUserDoc | null | undefined };

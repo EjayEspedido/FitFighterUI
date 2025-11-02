@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Routes,
   Route,
@@ -7,36 +7,46 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth, db } from "./firebase";
-import { doc, onSnapshot, getDoc } from "firebase/firestore";
 
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
+
+// Providers
 import { HeartRateProvider } from "./apis/HeartRateProvider";
 import { RigInputProvider, useRigInput } from "./apis/RigInputProvider";
 
+// Components
 import TopBarHR from "./components/TopBarHR";
+
+// Auth Pages
 import Login from "./Login";
 import Signup from "./Signup";
 
+// Main Pages
 import Home from "./Home";
 import Leaderboards from "./Leaderboards";
 import Settings from "./Settings";
 import Modes from "./Modes";
 import Profile from "./Profile";
 
+// Gameplay Screens
 import PlayStart from "./gameplay/PlayStart";
 import StartScreenCombo from "./gameplay/StartScreenCombo";
 import StartScreenFoF from "./gameplay/StartScreenFoF";
 import StartScreenRhythm from "./gameplay/StartScreenRhythm";
 
+// Gameplay (Active)
 import PlayCombo from "./gameplay/play/PlayCombo";
 import PlayFoF from "./gameplay/play/PlayFoF";
 import PlayRhythm from "./gameplay/play/PlayRhythm";
 
+// End Screens
 import EndScreenCombo from "./gameplay/EndScreenCombo";
 import EndScreenFoF from "./gameplay/EndScreenFoF";
 import EndScreenRhythm from "./gameplay/EndScreenRhythm";
 
+// Constants
 const PAGES = ["/", "/leaderboards", "/settings", "/DebugMQTT"];
 const RIG_ID = import.meta.env.VITE_RIG_ID ?? "rig-ff-001";
 
