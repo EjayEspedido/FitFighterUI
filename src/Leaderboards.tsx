@@ -1,225 +1,168 @@
+// src/Leaderboards.tsx (fixed)
 import { useEffect, useMemo, useState } from "react";
+import { db } from "./firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  where,
+  Timestamp,
+} from "firebase/firestore";
+import type { DocumentData } from "firebase/firestore";
+import { addComboSession } from "./apis/addSession"; // keep if you want console helper
+
+// expose only combo helper for quick dev testing (optional)
+if (import.meta.env.DEV) {
+  // @ts-ignore
+  window.addComboSession = addComboSession;
+}
 
 type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
+type CatKey = "combo" | "fof" | "rhythm";
 
-/* ---------- SAMPLE DATA ---------- */
-const comboRows = [
-  {
-    name: "Aly",
-    level: "Expert" as Level,
-    score: 9820,
-    maxScoreCombo: 64,
-    longestCombo: 79,
-  },
-  {
-    name: "Ben",
-    level: "Advanced" as Level,
-    score: 8760,
-    maxScoreCombo: 48,
-    longestCombo: 62,
-  },
-  {
-    name: "Cara",
-    level: "Intermediate" as Level,
-    score: 7340,
-    maxScoreCombo: 33,
-    longestCombo: 41,
-  },
-  {
-    name: "Dee",
-    level: "Beginner" as Level,
-    score: 5100,
-    maxScoreCombo: 18,
-    longestCombo: 25,
-  },
-];
-
-const fofRows = [
-  {
-    name: "Aly",
-    level: "Expert" as Level,
-    score: 8420,
-    foesHit: 132,
-    friendsSaved: 118,
-    foesMissed: 14,
-    friendsHit: 6,
-    goldenHits: 9,
-  },
-  {
-    name: "Evan",
-    level: "Advanced" as Level,
-    score: 7990,
-    foesHit: 121,
-    friendsSaved: 104,
-    foesMissed: 18,
-    friendsHit: 11,
-    goldenHits: 6,
-  },
-  {
-    name: "Mira",
-    level: "Intermediate" as Level,
-    score: 6120,
-    foesHit: 96,
-    friendsSaved: 82,
-    foesMissed: 23,
-    friendsHit: 19,
-    goldenHits: 3,
-  },
-  {
-    name: "Zee",
-    level: "Beginner" as Level,
-    score: 3980,
-    foesHit: 61,
-    friendsSaved: 55,
-    foesMissed: 28,
-    friendsHit: 26,
-    goldenHits: 1,
-  },
-];
-
-/** Rhythm is per-song: a mapping from song key -> rows */
-const RHYTHM_SONGS = [
-  { key: "neoncity", label: "Neon City" },
-  { key: "skyline", label: "Skyline Run" },
-  { key: "breaker", label: "Beat Breaker" },
-] as const;
-type SongKey = (typeof RHYTHM_SONGS)[number]["key"];
-
-const rhythmBySong: Record<
-  SongKey,
-  Array<{
-    name: string;
-    score: number;
-    accuracy: number;
-    perfect: number;
-    great: number;
-    good: number;
-    missed: number;
-    maxCombo: number;
-  }>
-> = {
-  neoncity: [
-    {
-      name: "Aly",
-      score: 11020,
-      accuracy: 98.4,
-      perfect: 221,
-      great: 38,
-      good: 9,
-      missed: 4,
-      maxCombo: 91,
-    },
-    {
-      name: "Jin",
-      score: 9720,
-      accuracy: 96.1,
-      perfect: 198,
-      great: 45,
-      good: 15,
-      missed: 8,
-      maxCombo: 70,
-    },
-    {
-      name: "Kai",
-      score: 8010,
-      accuracy: 93.2,
-      perfect: 164,
-      great: 54,
-      good: 23,
-      missed: 16,
-      maxCombo: 52,
-    },
-  ],
-  skyline: [
-    {
-      name: "Aly",
-      score: 10540,
-      accuracy: 97.9,
-      perfect: 208,
-      great: 49,
-      good: 11,
-      missed: 6,
-      maxCombo: 87,
-    },
-    {
-      name: "Lia",
-      score: 9220,
-      accuracy: 95.3,
-      perfect: 184,
-      great: 52,
-      good: 19,
-      missed: 12,
-      maxCombo: 66,
-    },
-  ],
-  breaker: [
-    {
-      name: "Jin",
-      score: 10180,
-      accuracy: 97.2,
-      perfect: 214,
-      great: 47,
-      good: 12,
-      missed: 7,
-      maxCombo: 83,
-    },
-    {
-      name: "Zee",
-      score: 7840,
-      accuracy: 92.6,
-      perfect: 152,
-      great: 58,
-      good: 31,
-      missed: 22,
-      maxCombo: 48,
-    },
-  ],
+type Song = {
+  id?: string;
+  songID: number;
+  title: string;
+  difficulty?: string;
 };
-/* --------------------------------- */
-
-const CATS = [
-  { key: "combo", label: "Combo Mode" },
-  { key: "fof", label: "Friend or Foe" },
-  { key: "rhythm", label: "Rhythm Game" },
-] as const;
-type CatKey = (typeof CATS)[number]["key"];
 
 export default function Leaderboards() {
   const [cat, setCat] = useState<CatKey>("combo");
-  const [song, setSong] = useState<SongKey>("neoncity");
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [selectedSong, setSelectedSong] = useState<number | null>(null);
+  const [comboRows, setComboRows] = useState<DocumentData[]>([]);
+  const [fofRows, setFofRows] = useState<DocumentData[]>([]);
+  const [rhythmRows, setRhythmRows] = useState<DocumentData[]>([]);
 
-  // Keyboard: 4/6 = category left/right; 7/8 = rhythm song up/down
+  // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      const ci = CATS.findIndex((c) => c.key === cat);
+      const cats: CatKey[] = ["combo", "fof", "rhythm"];
+      const ci = cats.indexOf(cat);
 
       if (e.key === "4" || e.key === "ArrowLeft") {
-        setCat(CATS[(ci - 1 + CATS.length) % CATS.length].key);
+        setCat(cats[(ci - 1 + cats.length) % cats.length]);
       } else if (e.key === "6" || e.key === "ArrowRight") {
-        setCat(CATS[(ci + 1) % CATS.length].key);
+        setCat(cats[(ci + 1) % cats.length]);
       } else if (cat === "rhythm") {
-        const si = RHYTHM_SONGS.findIndex((s) => s.key === song);
+        const si = songs.findIndex((s) => s.songID === selectedSong);
         if (e.key === "7") {
-          setSong(
-            RHYTHM_SONGS[(si - 1 + RHYTHM_SONGS.length) % RHYTHM_SONGS.length]
-              .key
-          );
+          const prev = songs[(si - 1 + songs.length) % songs.length];
+          setSelectedSong(prev?.songID ?? null);
         } else if (e.key === "8") {
-          setSong(RHYTHM_SONGS[(si + 1) % RHYTHM_SONGS.length].key);
+          const next = songs[(si + 1) % songs.length];
+          setSelectedSong(next?.songID ?? null);
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cat, song]);
+  }, [cat, songs, selectedSong]);
+
+  /* ---------------- Firestore listeners ---------------- */
+
+  // Songs: listen once, and set initial selectedSong when songs arrive.
+  useEffect(() => {
+    const qSongs = query(collection(db, "songs"), orderBy("songID", "asc"));
+    const unsub = onSnapshot(
+      qSongs,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Song, "id">),
+        }));
+        setSongs(list);
+        // only set initial selectedSong if still null (so user selection isn't clobbered)
+        if (list.length > 0 && selectedSong === null) {
+          setSelectedSong(list[0].songID);
+        }
+      },
+      (err) => {
+        console.error("songs onSnapshot error:", err);
+      }
+    );
+    return () => unsub();
+    // NOTE: intentionally empty deps so we subscribe once.
+    // Do not include selectedSong here.
+  }, []);
+
+  // Combo
+  useEffect(() => {
+    const q = query(
+      collection(db, "comboSessions"),
+      orderBy("score", "desc"),
+      limit(50)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setComboRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("combo onSnapshot error:", err)
+    );
+    return () => unsub();
+  }, []);
+
+  // Friend or Foe
+  useEffect(() => {
+    const q = query(
+      collection(db, "friendfoeSessions"),
+      orderBy("score", "desc"),
+      limit(50)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setFofRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("fof onSnapshot error:", err)
+    );
+    return () => unsub();
+  }, []);
+
+  // Rhythm (filtered by selectedSong).
+  // Coerce selectedSong to number to handle potential string storage.
+  useEffect(() => {
+    if (selectedSong === null) {
+      // clear rhythm rows while waiting
+      setRhythmRows([]);
+      return;
+    }
+    const songIdNum = Number(selectedSong);
+    if (Number.isNaN(songIdNum)) {
+      console.warn("selectedSong is not numeric:", selectedSong);
+      setRhythmRows([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, "rhythmSessions"),
+      where("songID", "==", songIdNum),
+      orderBy("score", "desc"),
+      limit(50)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) =>
+        setRhythmRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("rhythm onSnapshot error:", err)
+    );
+    return () => unsub();
+  }, [selectedSong]);
 
   const rows = useMemo(() => {
-    if (cat === "combo")
-      return [...comboRows].sort((a, b) => b.score - a.score);
-    if (cat === "fof") return [...fofRows].sort((a, b) => b.score - a.score);
-    return [...rhythmBySong[song]].sort((a, b) => b.score - a.score);
-  }, [cat, song]);
+    if (cat === "combo") return comboRows;
+    if (cat === "fof") return fofRows;
+    return rhythmRows;
+  }, [cat, comboRows, fofRows, rhythmRows]);
+
+  const fmtDate = (t?: Timestamp | any) => {
+    if (!t) return "-";
+    const d = t instanceof Timestamp ? t.toDate() : new Date(t);
+    return d.toLocaleDateString();
+  };
+
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="page">
@@ -227,27 +170,36 @@ export default function Leaderboards() {
 
       {/* Category tabs */}
       <div className="lb-tabs">
-        {CATS.map((c) => (
-          <button
-            key={c.key}
-            className={`lb-tab ${c.key === cat ? "active" : ""}`}
-            onClick={() => setCat(c.key)}
-          >
-            {c.label}
-          </button>
-        ))}
+        <button
+          className={`lb-tab ${cat === "combo" ? "active" : ""}`}
+          onClick={() => setCat("combo")}
+        >
+          Combo Mode
+        </button>
+        <button
+          className={`lb-tab ${cat === "fof" ? "active" : ""}`}
+          onClick={() => setCat("fof")}
+        >
+          Friend or Foe
+        </button>
+        <button
+          className={`lb-tab ${cat === "rhythm" ? "active" : ""}`}
+          onClick={() => setCat("rhythm")}
+        >
+          Rhythm Game
+        </button>
       </div>
 
-      {/* Rhythm song tabs (only when Rhythm selected) */}
+      {/* Rhythm song tabs */}
       {cat === "rhythm" && (
         <div className="lb-song-tabs">
-          {RHYTHM_SONGS.map((s) => (
+          {songs.map((s) => (
             <button
-              key={s.key}
-              className={`lb-song ${s.key === song ? "active" : ""}`}
-              onClick={() => setSong(s.key)}
+              key={s.songID}
+              className={`lb-song ${s.songID === selectedSong ? "active" : ""}`}
+              onClick={() => setSelectedSong(s.songID)}
             >
-              {s.label}
+              {s.title}
             </button>
           ))}
         </div>
@@ -264,6 +216,7 @@ export default function Leaderboards() {
                 <th>Score</th>
                 <th>Max Score Combo</th>
                 <th>Longest Combo</th>
+                <th>Date</th>
               </tr>
             )}
             {cat === "fof" && (
@@ -273,10 +226,8 @@ export default function Leaderboards() {
                 <th>Level</th>
                 <th>Score</th>
                 <th>Foes Hit</th>
-                <th>Friends Saved</th>
-                <th>Foes Missed</th>
                 <th>Friends Hit</th>
-                <th>Golden Hits</th>
+                <th>Date</th>
               </tr>
             )}
             {cat === "rhythm" && (
@@ -284,62 +235,59 @@ export default function Leaderboards() {
                 <th style={{ width: 36 }}>#</th>
                 <th>Name</th>
                 <th>Score</th>
-                <th>Accuracy</th>
                 <th>Perfect</th>
                 <th>Great</th>
                 <th>Good</th>
                 <th>Missed</th>
                 <th>Max Combo</th>
+                <th>Date</th>
               </tr>
             )}
           </thead>
 
           <tbody>
-            {cat === "combo" &&
-              rows.map((r: any, i) => (
-                <tr key={r.name + i}>
-                  <td>{i + 1}</td>
-                  <td>{r.name}</td>
-                  <td>
-                    <LevelBadge level={r.level} />
-                  </td>
-                  <td>{r.score.toLocaleString()}</td>
-                  <td>{r.maxScoreCombo}</td>
-                  <td>{r.longestCombo}</td>
-                </tr>
-              ))}
+            {rows.map((r: any, i: number) => (
+              <tr key={r.id ?? i}>
+                <td>{i + 1}</td>
+                <td>{r.displayName ?? r.name ?? "Anon"}</td>
 
-            {cat === "fof" &&
-              rows.map((r: any, i) => (
-                <tr key={r.name + i}>
-                  <td>{i + 1}</td>
-                  <td>{r.name}</td>
-                  <td>
-                    <LevelBadge level={r.level} />
-                  </td>
-                  <td>{r.score.toLocaleString()}</td>
-                  <td>{r.foesHit}</td>
-                  <td>{r.friendsSaved}</td>
-                  <td>{r.foesMissed}</td>
-                  <td>{r.friendsHit}</td>
-                  <td>{r.goldenHits}</td>
-                </tr>
-              ))}
+                {cat === "combo" && (
+                  <>
+                    <td>
+                      <LevelBadge level={r.level ?? "Beginner"} />
+                    </td>
+                    <td>{r.score?.toLocaleString()}</td>
+                    <td>{r.maxScoreCombo ?? r.maxCombo ?? "-"}</td>
+                    <td>{r.longestCombo ?? "-"}</td>
+                    <td>{fmtDate(r.sessionDate ?? r.createdAt)}</td>
+                  </>
+                )}
 
-            {cat === "rhythm" &&
-              rows.map((r: any, i) => (
-                <tr key={r.name + i}>
-                  <td>{i + 1}</td>
-                  <td>{r.name}</td>
-                  <td>{r.score.toLocaleString()}</td>
-                  <td>{r.accuracy.toFixed(1)}%</td>
-                  <td>{r.perfect}</td>
-                  <td>{r.great}</td>
-                  <td>{r.good}</td>
-                  <td>{r.missed}</td>
-                  <td>{r.maxCombo}</td>
-                </tr>
-              ))}
+                {cat === "fof" && (
+                  <>
+                    <td>
+                      <LevelBadge level={r.level ?? "Beginner"} />
+                    </td>
+                    <td>{r.score?.toLocaleString()}</td>
+                    <td>{r.foesHit ?? "-"}</td>
+                    <td>{r.friendsHit ?? "-"}</td>
+                    <td>{fmtDate(r.sessionDate ?? r.createdAt)}</td>
+                  </>
+                )}
+
+                {cat === "rhythm" && (
+                  <>
+                    <td>{r.score?.toLocaleString()}</td>
+                    <td>{r.perfectHit ?? "-"}</td>
+                    <td>{r.greatHit ?? "-"}</td>
+                    <td>{r.goodHit ?? "-"}</td>
+                    <td>{r.missed ?? "-"}</td>
+                    <td>{r.maxCombo ?? "-"}</td>
+                    <td>{fmtDate(r.sessionDate ?? r.createdAt)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -351,6 +299,7 @@ export default function Leaderboards() {
   );
 }
 
+/* ---------- LevelBadge (unchanged) ---------- */
 function LevelBadge({ level }: { level: Level }) {
   const color =
     level === "Expert"
