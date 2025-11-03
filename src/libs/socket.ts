@@ -12,17 +12,11 @@ const OPTS = {
   reconnectionDelay: 1000,
 };
 
-// singleton socket instance (not auto connecting)
+// singleton socket instance
 const socket: Socket = io(BASE, OPTS);
 
-/**
- * Idempotent connect helper — safe to call multiple times.
- * Returns the shared socket instance.
- */
 export function connectSocket(): Socket {
-  if (!socket.connected) {
-    socket.connect();
-  }
+  if (!socket.connected) socket.connect();
   return socket;
 }
 

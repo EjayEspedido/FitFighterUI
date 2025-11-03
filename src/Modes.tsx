@@ -1,7 +1,7 @@
 // src/Modes.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePadInput } from "./apis/RigInputProvider";
+import { useRigInput } from "./apis/RigInputProvider";
 
 type Item = {
   label: string;
@@ -30,7 +30,7 @@ const ITEMS: Item[] = [
 export default function Modes() {
   const [idx, setIdx] = useState(0);
   const navigate = useNavigate();
-  const { addListener } = usePadInput();
+  const { addListener } = useRigInput();
 
   const moveUp = () => setIdx((i) => (i - 1 + ITEMS.length) % ITEMS.length);
   const moveDown = () => setIdx((i) => (i + 1) % ITEMS.length);

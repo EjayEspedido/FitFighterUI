@@ -11,7 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import type { DocumentData } from "firebase/firestore";
-import { usePadInput } from "./apis/RigInputProvider";
+import { useRigInput } from "./apis/RigInputProvider";
 
 type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 type CatKey = "combo" | "fof" | "rhythm";
@@ -30,7 +30,7 @@ export default function Leaderboards() {
   const [comboRows, setComboRows] = useState<DocumentData[]>([]);
   const [fofRows, setFofRows] = useState<DocumentData[]>([]);
   const [rhythmRows, setRhythmRows] = useState<DocumentData[]>([]);
-  const { addListener } = usePadInput();
+  const { addListener } = useRigInput();
 
   // Keyboard nav (preserve original behaviour)
   useEffect(() => {

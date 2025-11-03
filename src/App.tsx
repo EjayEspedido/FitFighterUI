@@ -47,7 +47,7 @@ import EndScreenFoF from "./gameplay/EndScreenFoF";
 import EndScreenRhythm from "./gameplay/EndScreenRhythm";
 
 // Constants
-const PAGES = ["/", "/leaderboards", "/settings", "/DebugMQTT"];
+const PAGES = ["/", "/leaderboards", "/settings"];
 const RIG_ID = import.meta.env.VITE_RIG_ID ?? "rig-ff-001";
 
 export type AppUserDoc = {
