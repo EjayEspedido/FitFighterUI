@@ -1,68 +1,53 @@
 // src/apis/RigInputProvider.tsx
 import React, { useEffect, useRef, useState } from "react";
-import { connectRig, type PadEvent } from "./rigMqtt"; // adjust path if necessary
+import socket, { connectSocket } from "../libs/socket"; // adjust path if needed
+
+export interface PadEvent {
+  deviceId?: string;
+  pad?: number;
+  action?: string;
+  seq?: number;
+  timestamp?: string;
+  [k: string]: any;
+}
 
 type Listener = (e: PadEvent) => void;
 
-/**d
- * useRigInput(rigId?: string | null)
- * - rigId is optional; if omitted or null, the hook will be disconnected/idle.
- */
-export function useRigInput(rigId?: string | null) {
+export function useRigInput() {
   const listenersRef = useRef<Listener[]>([]);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState<boolean>(socket.connected);
   const [last, setLast] = useState<PadEvent | null>(null);
 
   useEffect(() => {
-    let disposed = false;
-    let cleanup: (() => void) | undefined = undefined;
-    const effectiveRigId = rigId ?? null;
+    // Idempotent connect
+    const s = connectSocket();
 
-    if (!effectiveRigId) {
+    function onConnect() {
+      setConnected(true);
+    }
+    function onDisconnect() {
       setConnected(false);
-      return;
+    }
+    function onPad(e: PadEvent) {
+      setLast(e);
+      listenersRef.current.forEach((fn) => fn(e));
     }
 
-    (async () => {
-      try {
-        console.debug(
-          "[RigInputProvider] calling connectRig for",
-          effectiveRigId
-        );
-        const c = await connectRig(
-          effectiveRigId,
-          (e: PadEvent) => {
-            if (!disposed) {
-              console.log("[PAD]", e.pad, e);
-              setLast(e);
-              for (const fn of listenersRef.current) fn(e);
-            }
-          },
-          () => {
-            if (!disposed) {
-              console.debug("[RigInputProvider] onConnect");
-              setConnected(true);
-            }
-          },
-          () => {
-            if (!disposed) {
-              console.debug("[RigInputProvider] onClose");
-              setConnected(false);
-            }
-          }
-        );
-        if (!disposed) cleanup = c;
-      } catch (err) {
-        console.error("[RigInput] connect error:", err);
-        if (!disposed) setConnected(false);
-      }
-    })();
+    // Subscribe
+    s.on("connect", onConnect);
+    s.on("disconnect", onDisconnect);
+    s.on("pad", onPad);
+
+    // If already connected at mount, update state
+    if (s.connected) setConnected(true);
 
     return () => {
-      disposed = true;
-      if (cleanup) cleanup();
+      // cleanup handlers but DO NOT disconnect shared socket
+      s.off("connect", onConnect);
+      s.off("disconnect", onDisconnect);
+      s.off("pad", onPad);
     };
-  }, [rigId]);
+  }, []);
 
   const addListener = (fn: Listener) => {
     listenersRef.current.push(fn);
@@ -71,28 +56,16 @@ export function useRigInput(rigId?: string | null) {
     };
   };
 
-  return {
-    connected,
-    last,
-    addListener,
-  };
+  return { connected, last, addListener };
 }
 
-/**
- * RigInputProvider component
- * - rigId prop is optional; default is null.
- * - keeps rendering children; it only manages the connection lifecycle.
- */
-export const RigInputProvider: React.FC<{
-  rigId?: string | null;
-  children?: React.ReactNode;
-}> = ({ rigId = null, children }) => {
-  const { connected } = useRigInput(rigId);
-
+// Provider component unchanged except it now reads from the hook
+export const RigInputProvider: React.FC<{ children?: React.ReactNode }> = ({
+  children,
+}) => {
+  const { connected } = useRigInput();
   return <div data-rig-connected={connected}>{children}</div>;
 };
 
 export default RigInputProvider;
-
-// Backwards-compat: alias the old hook name so existing imports work
 export { useRigInput as usePadInput };

@@ -124,7 +124,7 @@ export default function App() {
   }
 
   return (
-    <RigInputProvider rigId={RIG_ID}>
+    <RigInputProvider>
       <HeartRateProvider>
         <MainApp userDoc={userDoc} />
       </HeartRateProvider>

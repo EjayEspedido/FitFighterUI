@@ -1,4 +1,4 @@
-// src/Leaderboards.tsx (fixed)
+// src/Leaderboards.tsx
 import { useEffect, useMemo, useState } from "react";
 import { db } from "./firebase";
 import {
@@ -11,13 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import type { DocumentData } from "firebase/firestore";
-import { addComboSession } from "./apis/addSession"; // keep if you want console helper
-
-// expose only combo helper for quick dev testing (optional)
-if (import.meta.env.DEV) {
-  // @ts-ignore
-  window.addComboSession = addComboSession;
-}
+import { usePadInput } from "./apis/RigInputProvider";
 
 type Level = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 type CatKey = "combo" | "fof" | "rhythm";
@@ -36,8 +30,9 @@ export default function Leaderboards() {
   const [comboRows, setComboRows] = useState<DocumentData[]>([]);
   const [fofRows, setFofRows] = useState<DocumentData[]>([]);
   const [rhythmRows, setRhythmRows] = useState<DocumentData[]>([]);
+  const { addListener } = usePadInput();
 
-  // Keyboard nav
+  // Keyboard nav (preserve original behaviour)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
@@ -62,6 +57,30 @@ export default function Leaderboards() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [cat, songs, selectedSong]);
+
+  // Pad (MQTT) nav: mirror keyboard mapping
+  useEffect(() => {
+    const off = addListener((e: any) => {
+      const cats: CatKey[] = ["combo", "fof", "rhythm"];
+      const ci = cats.indexOf(cat);
+
+      if (e.pad === 4) {
+        setCat(cats[(ci - 1 + cats.length) % cats.length]);
+      } else if (e.pad === 6) {
+        setCat(cats[(ci + 1) % cats.length]);
+      } else if (cat === "rhythm") {
+        const si = songs.findIndex((s) => s.songID === selectedSong);
+        if (e.pad === 7) {
+          const prev = songs[(si - 1 + songs.length) % songs.length];
+          setSelectedSong(prev?.songID ?? null);
+        } else if (e.pad === 8) {
+          const next = songs[(si + 1) % songs.length];
+          setSelectedSong(next?.songID ?? null);
+        }
+      }
+    });
+    return off;
+  }, [addListener, cat, songs, selectedSong]);
 
   /* ---------------- Firestore listeners ---------------- */
 
@@ -99,7 +118,10 @@ export default function Leaderboards() {
     );
     const unsub = onSnapshot(
       q,
-      (snap) => setComboRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (snap) =>
+        setComboRows(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+        ),
       (err) => console.error("combo onSnapshot error:", err)
     );
     return () => unsub();
@@ -114,14 +136,14 @@ export default function Leaderboards() {
     );
     const unsub = onSnapshot(
       q,
-      (snap) => setFofRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (snap) =>
+        setFofRows(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))),
       (err) => console.error("fof onSnapshot error:", err)
     );
     return () => unsub();
   }, []);
 
   // Rhythm (filtered by selectedSong).
-  // Coerce selectedSong to number to handle potential string storage.
   useEffect(() => {
     if (selectedSong === null) {
       // clear rhythm rows while waiting
@@ -144,7 +166,9 @@ export default function Leaderboards() {
     const unsub = onSnapshot(
       q,
       (snap) =>
-        setRhythmRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+        setRhythmRows(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+        ),
       (err) => console.error("rhythm onSnapshot error:", err)
     );
     return () => unsub();

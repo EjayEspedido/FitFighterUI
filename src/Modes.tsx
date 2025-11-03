@@ -1,6 +1,7 @@
-// Modes.tsx
+// src/Modes.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePadInput } from "./apis/RigInputProvider";
 
 type Item = {
   label: string;
@@ -11,17 +12,17 @@ type Item = {
 const ITEMS: Item[] = [
   {
     label: "Combo Mode",
-    desc: "Memorize and execute punch strings...",
+    desc: "Memorize and execute punch strings.",
     modeKey: "combo",
   },
   {
     label: "Friend or Foe",
-    desc: "Hit the foes...",
+    desc: "Hit the foes.",
     modeKey: "fof",
   },
   {
     label: "Rhythm Game",
-    desc: "Punch to the beat...",
+    desc: "Punch to the beat.",
     modeKey: "rhythm",
   },
 ];
@@ -29,6 +30,7 @@ const ITEMS: Item[] = [
 export default function Modes() {
   const [idx, setIdx] = useState(0);
   const navigate = useNavigate();
+  const { addListener } = usePadInput();
 
   const moveUp = () => setIdx((i) => (i - 1 + ITEMS.length) % ITEMS.length);
   const moveDown = () => setIdx((i) => (i + 1) % ITEMS.length);
@@ -40,6 +42,7 @@ export default function Modes() {
     navigate("/play/start", { state: { mode } });
   };
 
+  // Keyboard controls (existing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
@@ -49,7 +52,21 @@ export default function Modes() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // handlers reference stable helpers
+
+  // Pad controls via RigInput (MQTT)
+  useEffect(() => {
+    const off = addListener((e: any) => {
+      // mirror Home mapping:
+      if (e.pad === 4 || e.pad === 6) moveUp(); // UP
+      else if (e.pad === 7 || e.pad === 8) moveDown(); // DOWN
+      else if (e.pad === 2) confirm(); // CONFIRM
+    });
+    return off;
+  }, [
+    addListener /* idx intentionally omitted: confirm uses latest idx from closure but idx updates re-register not strictly required */,
+  ]);
 
   return (
     <div className="page">

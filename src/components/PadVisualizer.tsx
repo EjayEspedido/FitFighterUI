@@ -1,22 +1,15 @@
-// PadVisualizer.tsx
+// src/PadVisualizer.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { usePadInput } from "../apis/RigInputProvider"; // ← add this import
+import { usePadInput } from "../apis/RigInputProvider";
 
 type PadVisualizerProps = {
-  /** If provided, component becomes controlled and will just mirror this pad (1..8) */
   activePad?: number | null;
-  /** How long each flash lasts (ms) */
   flashMs?: number;
-  /** Listen to keyboard keys 1..8 */
   listenKeys?: boolean;
-  /** Listen to a window CustomEvent with detail { pad: number } */
   listenCustomEvent?: boolean;
-  /** Name of the CustomEvent to listen to */
   customEventName?: string;
-  /** Optional remapper for keyboard -> pad number (return null to ignore) */
   mapKeyToPad?: (e: KeyboardEvent) => number | null;
-  /** Listen to MQTT via RigInputProvider */
   listenMqtt?: boolean;
 };
 
@@ -27,7 +20,6 @@ const padLayout: (number | null)[][] = [
 ];
 
 const BOX = 96;
-
 const boxStyle: CSSProperties = {
   width: BOX,
   height: BOX,
@@ -43,13 +35,11 @@ const boxStyle: CSSProperties = {
   userSelect: "none",
   transition: "transform 180ms ease, filter 180ms ease",
 };
-
 const activeBoxStyle: CSSProperties = {
   background: "#34d399",
   border: "4px solid #10b981",
   color: "#0b1b12",
 };
-
 const spacerStyle: CSSProperties = { width: BOX, height: BOX };
 const rowStyle: CSSProperties = {
   display: "flex",
@@ -75,9 +65,9 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
   listenCustomEvent = true,
   customEventName = "pad-hit",
   mapKeyToPad = defaultMapKeyToPad,
-  listenMqtt = true, // ← default ON
+  listenMqtt = true,
 }) => {
-  const { addListener, connected, rigId } = usePadInput(); // ← use MQTT ctx
+  const { addListener, connected } = usePadInput() ?? {};
   const [uncontrolledPad, setUncontrolledPad] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -89,7 +79,6 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
 
   const flash = (pad: number) => {
     if (pad < 1 || pad > 8) return;
-    // clear previous timer
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -128,21 +117,26 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
   // MQTT listener via RigInputProvider
   useEffect(() => {
     if (!listenMqtt || isControlled) return;
-    // subscribe; addListener returns an unsubscribe
-    const unsubscribe = addListener?.((e) => {
-      if (typeof e.pad === "number") flash(e.pad);
+    if (typeof addListener !== "function") return;
+    const off = addListener((e: any) => {
+      if (typeof e?.pad === "number") flash(e.pad);
     });
     return () => {
       try {
-        unsubscribe?.();
-      } catch {}
+        off?.();
+      } catch {
+        /* ignore */
+      }
     };
   }, [listenMqtt, isControlled, addListener, flashMs]);
 
   // Cleanup timer on unmount
   useEffect(
     () => () => {
-      if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     },
     []
   );
@@ -177,14 +171,11 @@ const PadVisualizer: React.FC<PadVisualizerProps> = ({
         ))}
       </div>
 
-      {/* Little status hint when uncontrolled */}
       {!isControlled && (
         <p style={{ color: "#9ca3af", marginTop: 12, textAlign: "center" }}>
           {[
             listenMqtt
-              ? `MQTT ${connected ? "● connected" : "○ offline"} (${
-                  rigId || "–"
-                })`
+              ? `MQTT ${connected ? "● connected" : "○ offline"}`
               : null,
             listenKeys ? "Keys 1–8" : null,
             listenCustomEvent ? `CustomEvent "${customEventName}"` : null,
