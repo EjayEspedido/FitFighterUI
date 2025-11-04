@@ -1,5 +1,5 @@
 // src/components/StartScreenCombo.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePadInput } from "../apis/RigInputProvider";
 import "./StartScreen.css";
@@ -36,14 +36,39 @@ export default function StartScreenCombo() {
   const incMinutes5 = () => setMinutes((m) => snap5(m + 5));
   const toggleEndless = () => setIsEndless((v) => !v);
 
-  const confirm = () => {
+  const confirm = async () => {
     const session: StartComboParams = {
       level,
       minutes: snap5(minutes),
       isEndless,
-      startBpm: bpm ?? null, // snapshot at start
+      startBpm: bpm ?? null,
       startedAt: Date.now(),
     };
+
+    // send a command to backend to start game on raspi
+    try {
+      // adjust URL to your backend host + auth if needed
+      await fetch("/api/start-game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: "pi01", // the pi identifier (change to match your device)
+          script: "gameMode1.py",
+          args: {
+            userLevel: level,
+            duration: session.minutes,
+            endless: session.isEndless,
+            startBpm: session.startBpm,
+          },
+          session,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to send start command", err);
+      // optionally show UI feedback
+    }
+
+    // then navigate into the play screen
     navigate("/play/combo", { state: { session } });
   };
 
