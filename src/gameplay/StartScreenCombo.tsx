@@ -48,19 +48,27 @@ export default function StartScreenCombo() {
     // send a command to backend to start game on raspi
     try {
       // adjust URL to your backend host + auth if needed
-      await fetch("/api/start-game", {
+      // in StartScreenCombo.tsx - replace your fetch call with this:
+      await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          deviceId: "pi01", // the pi identifier (change to match your device)
-          script: "gameMode1.py",
-          args: {
-            userLevel: level,
-            duration: session.minutes,
-            endless: session.isEndless,
-            startBpm: session.startBpm,
+          topic: `device/pi01/control/start`,
+          payload: {
+            action: "start",
+            game: "gameMode1",
+            duration: session.minutes * 60, // mqtt_pi_game.py uses seconds in its example
+            sessionId: session.startedAt?.toString(),
+            // optional reply topic if you want an ack back
+            replyTopic: `device/pi01/control/ack/${session.startedAt}`,
+            // pass UI args if you want
+            params: {
+              level: session.level,
+              startBpm: session.startBpm,
+              endless: session.isEndless,
+            },
           },
-          session,
+          qos: 0,
         }),
       });
     } catch (err) {
