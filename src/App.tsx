@@ -51,6 +51,7 @@ const PAGES = ["/", "/leaderboards", "/settings"];
 const RIG_ID = import.meta.env.VITE_RIG_ID ?? "rig-ff-001";
 
 export type AppUserDoc = {
+  uid?: string;
   displayName?: string;
   email?: string;
   photoURL?: string;
@@ -77,20 +78,26 @@ export default function App() {
       if (currentUser) {
         const userRef = doc(db, "users", currentUser.uid);
 
-        // optional one-time fetch
         try {
           const snap = await getDoc(userRef);
-          setUserDoc(snap.exists() ? (snap.data() as AppUserDoc) : null);
+          setUserDoc(
+            snap.exists()
+              ? ({ uid: snap.id, ...snap.data() } as AppUserDoc)
+              : null
+          );
         } catch (err) {
           console.error("getDoc error:", err);
           setUserDoc(null);
         }
 
-        // subscribe for realtime updates
         unsubDoc = onSnapshot(
           userRef,
           (snap) => {
-            setUserDoc(snap.exists() ? (snap.data() as AppUserDoc) : null);
+            setUserDoc(
+              snap.exists()
+                ? ({ uid: snap.id, ...snap.data() } as AppUserDoc)
+                : null
+            );
             setLoading(false);
           },
           (err) => {
@@ -99,7 +106,6 @@ export default function App() {
           }
         );
       } else {
-        // signed out
         setUserDoc(null);
         setLoading(false);
       }
