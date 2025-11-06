@@ -1,4 +1,3 @@
-// src/components/StartScreenFoF.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePadInput } from "../apis/RigInputProvider";
@@ -36,7 +35,8 @@ export default function StartScreenFoF() {
   const incMinutes5 = () => setMinutes((m) => snap5(m + 5));
   const toggleEndless = () => setIsEndless((v) => !v);
 
-  const confirm = () => {
+  // patched confirm: keep styling and navigation, but send MQTT start via backend
+  const confirm = async () => {
     const session: StartFoFParams = {
       level,
       minutes: snap5(minutes),
@@ -44,6 +44,39 @@ export default function StartScreenFoF() {
       startBpm: bpm ?? null, // snapshot at start
       startedAt: Date.now(),
     };
+
+    const sessionId = session.startedAt?.toString();
+    const deviceId = import.meta.env.VITE_MQTT_DEVICE || "pi01";
+
+    const payload = {
+      action: "start",
+      game: "gameMode2",
+      duration: session.minutes * 60,
+      sessionId,
+      replyTopic: `device/${deviceId}/control/ack/${sessionId}`,
+      params: {
+        level: session.level,
+        minutes: session.minutes,
+        isEndless: session.isEndless,
+        startBpm: session.startBpm,
+      },
+    };
+
+    try {
+      await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: `device/${deviceId}/control/start`,
+          payload,
+          qos: 0,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to send FoF start command", err);
+    }
+
+    // keep original navigation & UI flow
     navigate("/play/fof", { state: { session } });
   };
 
@@ -82,7 +115,7 @@ export default function StartScreenFoF() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [levelIdx, minutes, isEndless, bpm]); // bpm doesn't change handlers, but fine to include
+  }, [levelIdx, minutes, isEndless, bpm]);
 
   // pads
   const { last } = usePadInput();
