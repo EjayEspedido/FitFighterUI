@@ -2,6 +2,8 @@
 import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useHeartRate } from "../apis/HeartRateProvider";
+import { usePadInput } from "../apis/RigInputProvider";
+
 import "./StartScreen.css";
 
 export default function EndScreenCombo() {
